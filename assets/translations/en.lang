@@ -1,0 +1,12 @@
+# Sample locale file (see README.md in this directory). Not yet loaded by
+# any code -- this documents the intended key convention ahead of an
+# actual i18n implementation.
+category.display.name=Display
+category.display.label.display.brightness=Brightness
+category.display.description.display.brightness=Screen brightness percentage
+category.sound.name=Sound
+category.sound.label.sound.volume=Volume
+category.sound.description.sound.volume=Output volume percentage
+category.network.name=Network
+category.network.label.network.wifi_enabled=Wi-Fi
+category.network.description.network.wifi_enabled=Enable the wireless radio
