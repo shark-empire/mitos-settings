@@ -11,15 +11,15 @@ enforced in exactly one place, `SettingsManager::set` — there is no
 alternate write path that skips the check.
 
 - **`User`** — anything that only affects the signed-in user's own
-session (volume, wallpaper, keyboard layout, ...).
+  session (volume, wallpaper, keyboard layout, ...).
 - **`Admin`** — anything that affects the whole machine or opens a
-network-facing service (proxy settings, firewall, file/screen sharing,
-timezone, system language, ...).
+  network-facing service (proxy settings, firewall, file/screen sharing,
+  timezone, system language, ...).
 - **`Root`** — nothing ships at this level today; it's reserved for
-settings where "administrator" isn't a strong enough guarantee. The
-daemon refuses to apply a `Root`-level write unless it's actually
-running as uid 0 (`ipc::permissions::ensure_daemon_may_apply`), even
-though no code path currently produces one.
+  settings where "administrator" isn't a strong enough guarantee. The
+  daemon refuses to apply a `Root`-level write unless it's actually
+  running as uid 0 (`ipc::permissions::ensure_daemon_may_apply`), even
+  though no code path currently produces one.
 
 ## How privilege is determined
 
@@ -38,11 +38,11 @@ permissions: `IpcServer::bind` sets it to mode `0660`. In practice this
 means:
 
 - Anyone who can't read/write `/run/mitos-settings/daemon.sock` can't
-reach the daemon at all — normal filesystem permissions handle that.
+  reach the daemon at all — normal filesystem permissions handle that.
 - Anyone who **can** reach the socket (root, or a member of whatever
-group owns it) can ask the daemon to apply **any** setting up to
-`Root` level, without the daemon distinguishing between different
-connecting users.
+  group owns it) can ask the daemon to apply **any** setting up to
+  `Root` level, without the daemon distinguishing between different
+  connecting users.
 
 For a single-admin-group deployment (one trusted `mitos-admin` group, no
 untrusted multi-user access to that group) this is a reasonable, honestly
@@ -59,16 +59,16 @@ authorization input to `ipc::permissions::ensure_daemon_may_apply`.
 ## What's deliberately *not* implemented
 
 - **Applying system updates.** `services::updates::check_pending` is
-read-only by design. Actually upgrading packages is privileged,
-potentially disruptive (can restart services, need a reboot, fail
-halfway through), and deserves its own confirmation flow — not a bare
-`set updates.foo true`.
+  read-only by design. Actually upgrading packages is privileged,
+  potentially disruptive (can restart services, need a reboot, fail
+  halfway through), and deserves its own confirmation flow — not a bare
+  `set updates.foo true`.
 - **Account creation/deletion.** `services::accounts::list` is read-only.
-Creating or removing accounts is out of scope for a settings applet.
+  Creating or removing accounts is out of scope for a settings applet.
 - **Escalation UI.** `permissions::privileged::run_as_root` will try
-`pkexec` then non-interactive `sudo`, but this project ships no
-graphical polkit agent — that's a session/desktop-environment concern,
-not a settings-daemon concern.
+  `pkexec` then non-interactive `sudo`, but this project ships no
+  graphical polkit agent — that's a session/desktop-environment concern,
+  not a settings-daemon concern.
 
 ## Reporting a real vulnerability
 
