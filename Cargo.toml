@@ -1,0 +1,26 @@
+[package]
+name = "mitos-settings"
+version = "0.1.0"
+edition = "2021"
+description = "System settings manager and daemon for MITOS"
+license = "MIT"
+authors = ["MITOS Project"]
+default-run = "mitos-settings"
+
+# Intentionally dependency-free: persistence, IPC, and CLI parsing are all
+# hand-rolled on top of std. See README.md for the rationale. If you later
+# want serde/clap/etc., the module boundaries (settings::persistence,
+# ipc::protocol, cli::mod) are exactly where you'd swap them in.
+[dependencies]
+
+[lib]
+name = "mitos_settings"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mitos-settings"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 2
+panic = "unwind"
