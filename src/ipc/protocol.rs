@@ -5,7 +5,7 @@
 //! kinds.
 //!
 //! Requests: `GET <key>` / `SET <key> <encoded-value>` / `LIST [<category>]`
-//! / `RESET <key|--all>` / `PING`
+//! / `RESET <key|--all>` / `PING` / `WHOAMI`
 //!
 //! Responses: `OK <message>` / `ERR <message>` / a multi-line `OK` header
 //! followed by `DATA <key>=<value>` rows and a terminating `END` (used for
@@ -22,6 +22,10 @@ pub enum Request {
     /// `None` means "reset every setting".
     Reset { key: Option<String> },
     Ping,
+    /// Diagnostic: ask the daemon who it thinks is asking, per
+    /// `SO_PEERCRED`. Mostly useful for confirming peer-credential
+    /// resolution actually works end to end — see `ipc::permissions`.
+    WhoAmI,
 }
 
 #[derive(Debug, Clone)]
@@ -45,6 +49,7 @@ impl Request {
                 None => writeln!(w, "RESET --all"),
             },
             Request::Ping => writeln!(w, "PING"),
+            Request::WhoAmI => writeln!(w, "WHOAMI"),
         }
     }
 
@@ -72,6 +77,7 @@ impl Request {
                 }
             }
             "PING" => Ok(Request::Ping),
+            "WHOAMI" => Ok(Request::WhoAmI),
             other => Err(io::Error::new(io::ErrorKind::InvalidData, format!("unknown verb '{other}'"))),
         }
     }
@@ -137,6 +143,7 @@ mod tests {
             Request::Reset { key: Some("sound.volume".into()) },
             Request::Reset { key: None },
             Request::Ping,
+            Request::WhoAmI,
         ];
         for req in requests {
             let mut buf = Vec::new();
