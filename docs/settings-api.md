@@ -44,6 +44,7 @@ mitos-settings get <key>              Print the current value of a setting
 mitos-settings set <key> <value>      Change a setting
 mitos-settings list [category]        List categories, or one category's settings
 mitos-settings reset <key> | --all    Restore a setting (or everything) to default
+mitos-settings pick-wallpaper         Open the MITOS file picker and set the wallpaper
 mitos-settings --daemon               Run as the privileged settings daemon
 mitos-settings                        Open the interactive text navigator
 ```
