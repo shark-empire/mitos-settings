@@ -107,3 +107,40 @@ fn reset_via_socket_restores_default() {
 
     std::fs::remove_dir_all(socket.parent().unwrap()).ok();
 }
+
+#[test]
+fn whoami_reports_the_real_connecting_uid() {
+    let socket = temp_socket_path("whoami");
+    spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
+
+    let response = IpcClient::send(&socket, &Request::WhoAmI).unwrap();
+    let expected_uid = mitos_settings::permissions::current_context().uid;
+    match response {
+        // The test connects to its own daemon, so SO_PEERCRED should
+        // report this same process's uid back -- proving peer resolution
+        // actually round-trips through a real socket, not just a
+        // same-process UnixStream::pair() (see ipc::permissions's own
+        // unit test for that narrower check).
+        Response::Ok(msg) => assert!(msg.contains(&format!("uid {expected_uid}")), "unexpected whoami: {msg}"),
+        other => panic!("expected Ok, got {other:?}"),
+    }
+
+    std::fs::remove_dir_all(socket.parent().unwrap()).ok();
+}
+
+#[test]
+fn user_level_setting_succeeds_regardless_of_peer_privilege() {
+    // sound.volume is User-level, so this should succeed whether or not
+    // the connecting peer (in practice, this test process) happens to be
+    // an admin -- unlike an Admin/Root-level key, which would depend on
+    // the sandbox's actual privilege level and so isn't a reliable thing
+    // for a portable test to assert on.
+    let socket = temp_socket_path("user-level-peer");
+    spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
+
+    let response =
+        IpcClient::send(&socket, &Request::Set { key: "sound.volume".to_string(), value: Value::Int(12) }).unwrap();
+    assert!(matches!(response, Response::Ok(_)), "unexpected response: {response:?}");
+
+    std::fs::remove_dir_all(socket.parent().unwrap()).ok();
+}
