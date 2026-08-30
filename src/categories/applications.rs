@@ -16,7 +16,13 @@ impl Category for ApplicationsCategory {
         "preferences-desktop-default-applications"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Default applications", "Startup applications", "Installed applications", "Application permissions"]
+        &[
+            "Default applications",
+            "Startup applications",
+            "Installed applications",
+            "Application permissions",
+            "File manager preferences",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {
@@ -69,5 +75,39 @@ impl Category for ApplicationsCategory {
             Value::StrList(Vec::new()),
             PrivilegeLevel::User,
         ));
+
+        // --- File manager preferences: feed home.conf for mitos-file-manager ---
+        schema.register(SettingSpec::new(
+            "applications.file_manager_show_hidden",
+            "applications",
+            "Show hidden files",
+            "Show dotfiles and other hidden entries in the file manager",
+            ValueKind::Bool,
+            Value::Bool(false),
+            PrivilegeLevel::User,
+        ));
+
+        schema.register(SettingSpec::new(
+            "applications.file_manager_thumbnails_enabled",
+            "applications",
+            "Enable thumbnails",
+            "Generate image/video thumbnails in the file manager",
+            ValueKind::Bool,
+            Value::Bool(true),
+            PrivilegeLevel::User,
+        ));
+
+        schema.register(
+            SettingSpec::new(
+                "applications.file_manager_thumbnail_max_mb",
+                "applications",
+                "Thumbnail size limit",
+                "Skip generating thumbnails for files larger than this, in megabytes",
+                ValueKind::Int,
+                Value::Int(50),
+                PrivilegeLevel::User,
+            )
+            .range(1.0, 500.0),
+        );
     }
 }
