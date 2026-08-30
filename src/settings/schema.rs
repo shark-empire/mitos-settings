@@ -7,6 +7,12 @@ use crate::permissions::PrivilegeLevel;
 use crate::settings::value::{Value, ValueKind};
 use std::collections::BTreeMap;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValueFormat {
+    /// A CSS-style hex color: `#RGB`, `#RRGGBB`, or `#RRGGBBAA`.
+    HexColor,
+}
+
 #[derive(Debug, Clone)]
 pub struct SettingSpec {
     pub key: &'static str,
@@ -18,6 +24,7 @@ pub struct SettingSpec {
     pub privilege: PrivilegeLevel,
     pub choices: Option<&'static [&'static str]>,
     pub range: Option<(f64, f64)>,
+    pub format: Option<ValueFormat>,
     /// Read-only settings are informational — populated live from
     /// `hardware`/`services` rather than stored — and `SettingsManager::set`
     /// rejects writes to them.
@@ -44,6 +51,7 @@ impl SettingSpec {
             privilege,
             choices: None,
             range: None,
+            format: None,
             read_only: false,
         }
     }
@@ -55,6 +63,11 @@ impl SettingSpec {
 
     pub fn range(mut self, lo: f64, hi: f64) -> Self {
         self.range = Some((lo, hi));
+        self
+    }
+
+    pub fn format(mut self, format: ValueFormat) -> Self {
+        self.format = Some(format);
         self
     }
 

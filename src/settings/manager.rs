@@ -23,6 +23,7 @@ use crate::settings::validation::{self, ValidationError};
 use crate::settings::value::Value;
 use std::collections::HashMap;
 use std::fmt;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum SettingsError {
@@ -75,6 +76,13 @@ pub struct SettingsManager {
     mode: Mode,
     ctx: AuthContext,
     pub events: EventBus,
+    /// Where (if anywhere) to project a subset of settings out to
+    /// `~/.config/mitos/home.conf` for mitos-gui/mitos-file-manager — see
+    /// `services::home_conf`. `None` for manager instances built via
+    /// `with_stores` (tests, embedders using throwaway paths) so nothing
+    /// but a "real" `load()`-backed manager ever touches that shared,
+    /// machine-wide file.
+    home_conf_path: Option<PathBuf>,
 }
 
 impl SettingsManager {
@@ -82,14 +90,19 @@ impl SettingsManager {
     /// paths (see `config::paths`). This is what `main.rs`, the daemon, and
     /// the interactive app use.
     pub fn load(mode: Mode) -> Result<Self, SettingsError> {
-        Self::with_stores(mode, Store::user(), Store::system())
+        let mut manager = Self::with_stores(mode, Store::user(), Store::system())?;
+        let home_conf_path = paths::home_conf_path();
+        services::home_conf::write_initial(&manager, &home_conf_path);
+        manager.home_conf_path = Some(home_conf_path);
+        Ok(manager)
     }
 
     /// Builds a manager against arbitrary stores. Exists so tests (and
     /// anything else embedding this crate) can point at throwaway paths
     /// instead of the real, machine-wide config files — without resorting
     /// to mutating process-global environment variables, which doesn't
-    /// play well with tests running in parallel.
+    /// play well with tests running in parallel. Does *not* project to
+    /// home.conf unless `with_home_conf_path` is also called.
     pub fn with_stores(mode: Mode, user_store: Store, system_store: Store) -> Result<Self, SettingsError> {
         let mut schema = Schema::new();
         categories::register_all(&mut schema);
@@ -106,7 +119,17 @@ impl SettingsManager {
             mode,
             ctx: permissions::current_context(),
             events: EventBus::new(),
+            home_conf_path: None,
         })
+    }
+
+    /// Points this manager's home.conf projection at an explicit path
+    /// instead of the real, shared `~/.config/mitos/home.conf` — used by
+    /// tests that want to exercise the projection behavior without
+    /// touching real desktop state.
+    pub fn with_home_conf_path(mut self, path: PathBuf) -> Self {
+        self.home_conf_path = Some(path);
+        self
     }
 
     pub fn schema(&self) -> &Schema {
@@ -123,10 +146,23 @@ impl SettingsManager {
     }
 
     pub fn set(&mut self, key: &str, value: Value) -> Result<(), SettingsError> {
+        let ctx = self.ctx.clone();
+        self.set_with_context(key, value, &ctx)
+    }
+
+    /// Used by the IPC daemon to apply a change on behalf of a specific
+    /// connecting peer (identified via `SO_PEERCRED`, not the daemon's own
+    /// root identity). This is what actually enforces privilege for
+    /// requests arriving over the socket — see docs/security.md.
+    pub fn set_for_peer(&mut self, key: &str, value: Value, peer: &AuthContext) -> Result<(), SettingsError> {
+        self.set_with_context(key, value, peer)
+    }
+
+    fn set_with_context(&mut self, key: &str, value: Value, ctx: &AuthContext) -> Result<(), SettingsError> {
         let spec = self.schema.get(key).ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?.clone();
         validation::validate(&spec, &value).map_err(SettingsError::Invalid)?;
 
-        let held = self.ctx.level();
+        let held = ctx.level();
         if spec.privilege > PrivilegeLevel::User && held < spec.privilege {
             if self.mode == Mode::Standalone {
                 return self.set_via_daemon(key, &value);
@@ -137,6 +173,9 @@ impl SettingsManager {
         self.values.insert(key.to_string(), value.clone());
         self.persist(&spec)?;
         services::apply(key, &value);
+        if let Some(path) = self.home_conf_path.clone() {
+            services::home_conf::sync_if_relevant(key, self, &path);
+        }
         self.events.publish(Event::SettingChanged { key: key.to_string(), value });
         Ok(())
     }
@@ -146,6 +185,12 @@ impl SettingsManager {
         self.set(key, default)
     }
 
+    /// Peer-authorized counterpart to `reset` — see `set_for_peer`.
+    pub fn reset_for_peer(&mut self, key: &str, peer: &AuthContext) -> Result<(), SettingsError> {
+        let default = self.schema.get(key).ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?.default.clone();
+        self.set_for_peer(key, default, peer)
+    }
+
     /// Resets every setting to its default. Best-effort: a privileged key
     /// this process can't reach (no daemon running, not an admin) is
     /// skipped rather than aborting the whole operation.
@@ -153,6 +198,15 @@ impl SettingsManager {
         let keys: Vec<&'static str> = self.schema.all().filter(|s| !s.read_only).map(|s| s.key).collect();
         for key in keys {
             let _ = self.reset(key);
+        }
+        Ok(())
+    }
+
+    /// Peer-authorized counterpart to `reset_all` — see `set_for_peer`.
+    pub fn reset_all_for_peer(&mut self, peer: &AuthContext) -> Result<(), SettingsError> {
+        let keys: Vec<&'static str> = self.schema.all().filter(|s| !s.read_only).map(|s| s.key).collect();
+        for key in keys {
+            let _ = self.reset_for_peer(key, peer);
         }
         Ok(())
     }
@@ -277,6 +331,45 @@ mod tests {
         if let Err(e) = manager.set("network.proxy_mode", Value::Str("manual".into())) {
             assert!(matches!(e, SettingsError::PermissionDenied { .. }));
         }
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn set_for_peer_rejects_an_unprivileged_peer_regardless_of_the_daemons_own_uid() {
+        let (mut manager, dir) = isolated_manager(Mode::DaemonAuthority);
+        let unprivileged_peer = AuthContext { uid: 65534, username: "nobody".to_string(), is_admin: false };
+
+        let err = manager
+            .set_for_peer("network.proxy_mode", Value::Str("manual".into()), &unprivileged_peer)
+            .unwrap_err();
+
+        assert!(matches!(err, SettingsError::PermissionDenied { .. }));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn set_for_peer_allows_a_privileged_peer() {
+        let (mut manager, dir) = isolated_manager(Mode::DaemonAuthority);
+        let admin_peer = AuthContext { uid: 1000, username: "amy".to_string(), is_admin: true };
+
+        manager.set_for_peer("network.proxy_mode", Value::Str("manual".into()), &admin_peer).unwrap();
+
+        assert_eq!(manager.get("network.proxy_mode").unwrap(), &Value::Str("manual".into()));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn set_for_peer_never_consults_the_managers_own_identity() {
+        // The whole point of set_for_peer is that it's the *peer's*
+        // privilege that matters, not whatever uid the daemon process
+        // itself happens to run as. Root peer should always succeed even
+        // though `isolated_manager`'s own ctx is whatever the sandbox is.
+        let (mut manager, dir) = isolated_manager(Mode::DaemonAuthority);
+        let root_peer = AuthContext { uid: 0, username: "root".to_string(), is_admin: true };
+
+        manager.set_for_peer("security.automatic_security_updates", Value::Bool(false), &root_peer).unwrap();
+
+        assert_eq!(manager.get("security.automatic_security_updates").unwrap(), &Value::Bool(false));
         std::fs::remove_dir_all(dir).ok();
     }
 }
