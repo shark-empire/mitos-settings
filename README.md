@@ -41,14 +41,21 @@ Settings
   persistence with a real migration example.
 - **A privileged daemon** (`src/ipc/`, `mitos-settings --daemon`) reached
   over a Unix socket, so unprivileged writes to `Admin`/`Root`-level
-  settings get forwarded automatically rather than just failing.
+  settings get forwarded automatically rather than just failing. Every
+  connection is authenticated via `SO_PEERCRED` — the daemon checks the
+  real, connecting peer's privilege, not just whether they reached the
+  socket. See `docs/security.md`.
 - **Real system integration** (`src/hardware/`, `src/services/`): reads
   `/proc` and `/sys` directly, and shells out to standard Linux tools
   (`nmcli`, `amixer`, `timedatectl`, ...) to actually apply changes — with
   every write logged rather than fatal if the tool isn't installed.
-- **Three front-ends over one core**: a CLI (`get`/`set`/`list`/`reset`),
-  an interactive text navigator, and the daemon's IPC server — all three
-  are thin shells over the same `SettingsManager`.
+- **Live sync to the rest of the desktop** (`src/services/home_conf.rs`):
+  appearance/theme/wallpaper/shell-layout changes are projected out to
+  `~/.config/mitos/home.conf`, which `mitos-gui` and `mitos-file-manager`
+  watch via inotify — no IPC needed on their end. See `docs/home-conf.md`.
+- **Three front-ends over one core**: a CLI (`get`/`set`/`list`/`reset`/
+  `pick-wallpaper`), an interactive text navigator, and the daemon's IPC
+  server — all three are thin shells over the same `SettingsManager`.
 
 ## Building
 
@@ -80,6 +87,7 @@ Full docs in `docs/`:
 [`architecture.md`](docs/architecture.md) ·
 [`settings-api.md`](docs/settings-api.md) ·
 [`configuration.md`](docs/configuration.md) ·
+[`home-conf.md`](docs/home-conf.md) ·
 [`security.md`](docs/security.md) ·
 [`developers.md`](docs/developers.md)
 
