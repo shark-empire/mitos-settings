@@ -6,5 +6,5 @@ pub mod authorization;
 pub mod policy;
 pub mod privileged;
 
-pub use authorization::{current_context, AuthContext};
+pub use authorization::{context_for_uid, current_context, AuthContext};
 pub use policy::{describe, satisfies, PrivilegeLevel};
