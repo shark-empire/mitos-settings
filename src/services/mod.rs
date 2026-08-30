@@ -10,7 +10,9 @@
 pub mod accounts;
 pub mod audio;
 pub mod bluetooth;
+pub mod dbus;
 pub mod display;
+pub mod home_conf;
 pub mod locale;
 pub mod network;
 pub mod power;
