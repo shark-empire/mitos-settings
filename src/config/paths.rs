@@ -43,3 +43,23 @@ pub fn runtime_dir() -> PathBuf {
 pub fn daemon_socket_path() -> PathBuf {
     PathBuf::from("/run/mitos-settings/daemon.sock")
 }
+
+/// Shared desktop-shell config directory, `$XDG_CONFIG_HOME/mitos` (falls
+/// back to `~/.config/mitos`) — distinct from mitos-settings' own config
+/// dir (`user_config_dir`, above). This is where `home.conf` lives: a
+/// small, other-programs-readable projection of a handful of settings that
+/// mitos-gui and mitos-file-manager watch directly via inotify. See
+/// docs/home-conf.md.
+pub fn mitos_shared_config_dir() -> PathBuf {
+    if let Ok(xdg) = env::var("XDG_CONFIG_HOME") {
+        if !xdg.is_empty() {
+            return PathBuf::from(xdg).join("mitos");
+        }
+    }
+    let home = env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config").join("mitos")
+}
+
+pub fn home_conf_path() -> PathBuf {
+    mitos_shared_config_dir().join("home.conf")
+}
