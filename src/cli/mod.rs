@@ -7,6 +7,7 @@
 
 pub mod get;
 pub mod list;
+pub mod pick_wallpaper;
 pub mod reset;
 pub mod set;
 
@@ -20,6 +21,7 @@ Commands:
   set <key> <value>      Change a setting
   list [category]        List every category, or every setting in one
   reset <key> | --all    Restore a setting (or everything) to its default
+  pick-wallpaper          Open the MITOS file picker and set the wallpaper
   --daemon                Run as the privileged settings daemon
   --help                  Show this message
 
@@ -50,6 +52,7 @@ pub fn run(args: &[String]) -> i32 {
         "set" => set::execute(&mut manager, rest),
         "list" => list::execute(&manager, rest),
         "reset" => reset::execute(&mut manager, rest),
+        "pick-wallpaper" => pick_wallpaper::execute(&mut manager),
         other => Err(format!("unknown command '{other}'\n\n{USAGE}")),
     };
 
