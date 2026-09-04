@@ -9,6 +9,7 @@ pub mod get;
 pub mod list;
 pub mod pick_wallpaper;
 pub mod reset;
+pub mod schema;
 pub mod set;
 
 use crate::settings::manager::{Mode, SettingsManager};
@@ -19,13 +20,15 @@ Usage: mitos-settings <command> [args]
 Commands:
   get <key>              Print the current value of a setting
   set <key> <value>      Change a setting
-  list [category]        List every category, or every setting in one
+  list [category] [--json]  List categories/settings; --json for machine-readable output
   reset <key> | --all    Restore a setting (or everything) to its default
+  schema                  Dump the full schema (types, defaults, constraints) as JSON
   pick-wallpaper          Open the MITOS file picker and set the wallpaper
   --daemon                Run as the privileged settings daemon
   --help                  Show this message
 
-Run with no command to open the interactive navigator.";
+Run with no command to open the interactive navigator.
+See INTEGRATION.md for how other MITOS projects should talk to this one.";
 
 /// Returns a process exit code, the way `main` expects.
 pub fn run(args: &[String]) -> i32 {
@@ -52,6 +55,7 @@ pub fn run(args: &[String]) -> i32 {
         "set" => set::execute(&mut manager, rest),
         "list" => list::execute(&manager, rest),
         "reset" => reset::execute(&mut manager, rest),
+        "schema" => schema::execute(&manager),
         "pick-wallpaper" => pick_wallpaper::execute(&mut manager),
         other => Err(format!("unknown command '{other}'\n\n{USAGE}")),
     };
