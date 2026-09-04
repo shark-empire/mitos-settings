@@ -6,6 +6,11 @@ parsing are all hand-rolled on top of `std`. See `docs/architecture.md`
 for why, and where a real dependency would plug in if you're extending
 this for production.
 
+**Building another MITOS component that needs to talk to this one?**
+Start with [`INTEGRATION.md`](INTEGRATION.md) — it covers every way in
+(Rust library, CLI, IPC daemon, JSON export, `home.conf`) and exactly
+what's still undecided.
+
 ```
 $ mitos-settings list
 appearance       Appearance
