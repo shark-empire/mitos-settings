@@ -63,3 +63,33 @@ fn unknown_key_returns_none_not_a_panic() {
     let schema = full_schema();
     assert!(schema.get("totally.made.up.key").is_none());
 }
+
+#[test]
+fn schema_json_export_is_stable_and_covers_every_setting() {
+    use mitos_settings::settings::json::schema_to_json;
+
+    let schema = full_schema();
+    let json = schema_to_json(&schema);
+
+    // Every registered key shows up exactly once.
+    for spec in schema.all() {
+        assert_eq!(json.matches(&format!("\"key\": \"{}\"", spec.key)).count(), 1);
+    }
+
+    // Stable across repeated calls -- other repos may want to diff this
+    // output or check it into version control (see INTEGRATION.md).
+    assert_eq!(json, schema_to_json(&schema));
+}
+
+#[test]
+fn hex_color_accent_setting_reports_its_format_via_json() {
+    // Spot check: the JSON export should be detailed enough for a non-Rust
+    // tool to know appearance.accent_color needs a hex string, not just
+    // that it's "a string".
+    use mitos_settings::settings::json::schema_to_json;
+
+    let schema = full_schema();
+    let json = schema_to_json(&schema);
+    assert!(json.contains("\"key\": \"appearance.accent_color\""));
+    assert!(json.contains("\"format\": \"hex_color\""));
+}
