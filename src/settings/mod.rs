@@ -5,6 +5,7 @@
 //! that together (`manager`).
 
 pub mod defaults;
+pub mod json;
 pub mod manager;
 pub mod persistence;
 pub mod schema;
