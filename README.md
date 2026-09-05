@@ -1,10 +1,15 @@
 # MITOS Settings
 
-A system settings manager and privileged daemon for MITOS, written in
-Rust with **zero external dependencies** — persistence, IPC, and CLI
-parsing are all hand-rolled on top of `std`. See `docs/architecture.md`
-for why, and where a real dependency would plug in if you're extending
-this for production.
+A system settings manager and privileged daemon for MITOS. The core
+(this crate) is written in Rust with **zero external dependencies** —
+persistence, IPC, and CLI parsing are all hand-rolled on top of `std`. See
+`docs/architecture.md` for why, and where a real dependency would plug in
+if you're extending this for production.
+
+There's also a graphical settings app (`gui/`, GTK4) for anyone who
+shouldn't have to touch a terminal — see [`gui/README.md`](gui/README.md).
+It's a separate workspace member specifically so GTK4 never becomes a
+dependency of the root-owned daemon binary.
 
 **Building another MITOS component that needs to talk to this one?**
 Start with [`INTEGRATION.md`](INTEGRATION.md) — it covers every way in
@@ -74,18 +79,20 @@ No network access is required to build — see `Cargo.toml`.
 ## Layout
 
 ```
-src/
-├── app/            interactive text navigator
-├── categories/      the 26 settings categories
-├── cli/             get / set / list / reset subcommands
-├── config/          low-level config file I/O, paths, migrations
-├── hardware/        read-only /proc, /sys introspection
-├── ipc/             daemon protocol, client, server
-├── notifications/   in-process pub/sub event bus
-├── permissions/      privilege levels and identity
-├── platform/         OS-specific command execution helpers
-├── services/        live system mutation (volume, wifi, timezone, ...)
-└── settings/         the core data model: Value, Schema, SettingsManager
+mitos-settings/           core crate: daemon, CLI, library (zero deps)
+├── src/
+│   ├── app/            interactive text navigator
+│   ├── categories/      the 26 settings categories
+│   ├── cli/             get / set / list / reset / schema / pick-wallpaper
+│   ├── config/           low-level config file I/O, paths, migrations
+│   ├── hardware/         read-only /proc, /sys introspection
+│   ├── ipc/               daemon protocol, client, server
+│   ├── notifications/     in-process pub/sub event bus
+│   ├── permissions/        privilege levels and identity
+│   ├── platform/            OS-specific command execution helpers
+│   ├── services/           live system mutation (volume, wifi, timezone, ...)
+│   └── settings/            data model: Value, Schema, SettingsManager, JSON export
+└── gui/                    workspace member: GTK4 graphical settings app
 ```
 
 Full docs in `docs/`:

@@ -53,6 +53,10 @@ This gets you the full `Schema`, live validation, and the `hardware`/
 brightness/wifi control, etc.) without shelling out to the CLI or opening
 a socket. See `docs/settings-api.md`.
 
+**`gui/` in this repo is a working example of this pattern** — it's a
+separate crate that depends on the core crate by path and builds a full
+GTK4 UI over it. Worth a look if you're setting up something similar.
+
 **I don't yet know if your other components are Rust, or if this repo
 layout is a Cargo workspace, separate repos, or git submodules** — that
 changes whether `path = "../mitos-settings"` even makes sense. See
@@ -228,17 +232,27 @@ convention (see `src/config/paths.rs`).
 
 ## On dependencies
 
-This project is currently **zero external dependencies** — persistence,
-the IPC protocol, JSON export, and CLI parsing are all hand-rolled on
-`std`. That was originally a necessity (I couldn't compile/verify a
-dependency in the sandbox I built this in) as much as a choice, but it's
-turned into a real property worth preserving deliberately in most places:
-the formats are simple enough that hand-rolled code is easy to audit, and
-nothing you build against this crate needs to worry about a `mitos-settings`
-dependency dragging in a large tree of its own.
+The **core crate** (this repo's root — the daemon, CLI, and library) is
+still zero external dependencies, and that's deliberate to keep it that
+way: persistence, the IPC protocol, and JSON export are all hand-rolled on
+`std`, and the daemon binary in particular runs as root, so keeping its
+dependency tree as small as possible is a real security property, not
+just tidiness.
 
-That said, here's where a real dependency would be a genuine improvement,
-if you want it:
+**`gui/` is the one exception**, and it's structured specifically to keep
+that exception contained: it's a separate workspace member (see the root
+`Cargo.toml`'s `[workspace]` section) that depends on GTK4
+(`gtk4`/`gtk4-rs`) for its window and widgets. GTK4 never becomes a
+dependency of the `mitos-settings` binary or library — only of
+`mitos-settings-gui`, which is unprivileged and talks to the core crate
+the same way any other Rust MITOS component would (§1, the path
+dependency). If you're building another component that also needs a GUI
+toolkit, the same pattern applies: keep it in its own crate, depend on
+`mitos-settings` (or whichever core crate) by path, don't let the toolkit
+dependency creep into anything privileged.
+
+Beyond that, here's where a real dependency in the *core* crate would be
+a genuine improvement, if you want it:
 
 - **`zbus`** (pure-Rust D-Bus, no `libdbus` C dependency) — would replace
   `src/services/dbus.rs` shelling out to `gdbus`/`dbus-send` with a typed,
@@ -258,11 +272,15 @@ if you want it:
   hand-rolled argv matching in `src/cli/mod.rs`. Low priority; the current
   CLI surface is small enough that this hasn't been a real pain point.
 
-**I haven't added any of these.** Every change I've made so far, I could
-reason through by hand and I had the existing test suite to catch obvious
-regressions. A new dependency is a bigger leap of faith without being able
-to actually run `cargo build` — so: say the word on any of the above and
-I'll add it, but I'd rather you make that call than have me guess.
+I haven't added any of these to the core crate. Every change I've made so
+far there, I could reason through by hand and had the existing test suite
+to catch obvious regressions. `gui/`'s GTK4 dependency was a different
+call — the alternative (forcing a CLI on every user) was a worse tradeoff
+than the compile-risk, and it's isolated to a crate nothing privileged
+depends on. A new dependency in the *core* crate is a bigger leap of faith
+without being able to actually run `cargo build` — so for those, say the
+word and I'll add it, but I'd rather you make that call than have me
+guess.
 
 ## Open questions
 

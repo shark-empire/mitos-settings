@@ -7,6 +7,14 @@ license = "MIT"
 authors = ["MITOS Project"]
 default-run = "mitos-settings"
 
+# This package is also the workspace root. The core crate (this one) stays
+# dependency-free -- notably, it's what the root daemon binary is built
+# from, and a root-owned process should have as small a dependency surface
+# as possible. The GUI (gui/) is a separate workspace member specifically
+# so its GTK4 dependency never touches the daemon binary. See gui/README.md.
+[workspace]
+members = ["gui"]
+
 # Intentionally dependency-free: persistence, IPC, and CLI parsing are all
 # hand-rolled on top of std. See README.md for the rationale. If you later
 # want serde/clap/etc., the module boundaries (settings::persistence,
