@@ -1,0 +1,28 @@
+[package]
+name = "mitos-settings-gui"
+version = "0.1.0"
+edition = "2021"
+description = "Graphical settings app for MITOS -- a GTK4 UI over the mitos-settings core library"
+license = "MIT"
+authors = ["MITOS Project"]
+
+[[bin]]
+name = "mitos-settings-gui"
+path = "src/main.rs"
+
+[dependencies]
+# Path dependency on the core crate -- this is the "Rust library" integration
+# path documented in ../INTEGRATION.md, used directly rather than going
+# through the CLI or IPC. Privileged writes still transparently forward to
+# the daemon over IPC when needed, because that logic lives in
+# SettingsManager::set itself -- the GUI doesn't need to know or care.
+mitos-settings = { path = ".." }
+
+# NOTE: version pin is a best-effort guess, not a verified-compatible one --
+# see "Read this before building" in README.md in this directory.
+# `gtk4` is renamed to `gtk` here purely for terser code (gtk::Widget
+# instead of gtk4::Widget), a common gtk4-rs convention.
+gtk = { package = "gtk4", version = "0.9" }
+
+[profile.release]
+opt-level = 2

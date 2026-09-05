@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+GenericName=System Settings
+Comment=Configure MITOS
+Exec=mitos-settings-gui
+Icon=preferences-system
+Terminal=false
+Categories=Settings;System;
+StartupNotify=true
