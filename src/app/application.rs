@@ -26,6 +26,7 @@ impl Application {
 
     pub fn run(&mut self) {
         println!("MITOS Settings — interactive mode. Type 'help' for commands, 'quit' to exit.");
+        println!("(Prefer a graphical app? Run mitos-settings-gui instead.)");
         while !self.state.quit {
             self.print_screen();
             let Some(line) = read_line("\n> ") else { break };
