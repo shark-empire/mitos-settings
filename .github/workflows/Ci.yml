@@ -1,4 +1,4 @@
-name: TEST-MITOS-settings
+name: TEST MITOS-settings
 
 on: [push, pull_request]
 
