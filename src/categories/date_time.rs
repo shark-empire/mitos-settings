@@ -67,7 +67,10 @@ impl Category for DateTimeCategory {
     fn live_info(&self) -> Vec<(&'static str, String)> {
         match crate::services::time::current_timezone() {
             Some(tz) => vec![("system_timezone", tz)],
-            None => vec![("system_timezone", "unavailable (timedatectl not found)".to_string())],
+            None => vec![(
+                "system_timezone",
+                "unavailable (timedatectl not found)".to_string(),
+            )],
         }
     }
 }

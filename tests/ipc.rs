@@ -52,11 +52,26 @@ fn get_and_set_round_trip_over_the_socket() {
     let socket = temp_socket_path("get-set");
     spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
 
-    let set_response =
-        IpcClient::send(&socket, &Request::Set { key: "sound.volume".to_string(), value: Value::Int(66) }).unwrap();
-    assert!(matches!(set_response, Response::Ok(_)), "unexpected response: {set_response:?}");
+    let set_response = IpcClient::send(
+        &socket,
+        &Request::Set {
+            key: "sound.volume".to_string(),
+            value: Value::Int(66),
+        },
+    )
+    .unwrap();
+    assert!(
+        matches!(set_response, Response::Ok(_)),
+        "unexpected response: {set_response:?}"
+    );
 
-    let get_response = IpcClient::send(&socket, &Request::Get { key: "sound.volume".to_string() }).unwrap();
+    let get_response = IpcClient::send(
+        &socket,
+        &Request::Get {
+            key: "sound.volume".to_string(),
+        },
+    )
+    .unwrap();
     match get_response {
         Response::Ok(encoded) => assert_eq!(Value::decode(&encoded).unwrap(), Value::Int(66)),
         other => panic!("expected Ok, got {other:?}"),
@@ -70,7 +85,13 @@ fn list_returns_rows_for_a_category() {
     let socket = temp_socket_path("list");
     spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
 
-    let response = IpcClient::send(&socket, &Request::List { category: Some("sound".to_string()) }).unwrap();
+    let response = IpcClient::send(
+        &socket,
+        &Request::List {
+            category: Some("sound".to_string()),
+        },
+    )
+    .unwrap();
     match response {
         Response::Data(rows) => assert!(rows.iter().any(|(k, _)| k == "sound.volume")),
         other => panic!("expected Data, got {other:?}"),
@@ -84,7 +105,13 @@ fn unknown_key_produces_an_error_response_not_a_dropped_connection() {
     let socket = temp_socket_path("unknown-key");
     spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
 
-    let response = IpcClient::send(&socket, &Request::Get { key: "nonexistent.key".to_string() }).unwrap();
+    let response = IpcClient::send(
+        &socket,
+        &Request::Get {
+            key: "nonexistent.key".to_string(),
+        },
+    )
+    .unwrap();
     assert!(matches!(response, Response::Err(_)));
 
     std::fs::remove_dir_all(socket.parent().unwrap()).ok();
@@ -95,11 +122,30 @@ fn reset_via_socket_restores_default() {
     let socket = temp_socket_path("reset");
     spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
 
-    IpcClient::send(&socket, &Request::Set { key: "sound.volume".to_string(), value: Value::Int(3) }).unwrap();
-    let reset_response = IpcClient::send(&socket, &Request::Reset { key: Some("sound.volume".to_string()) }).unwrap();
+    IpcClient::send(
+        &socket,
+        &Request::Set {
+            key: "sound.volume".to_string(),
+            value: Value::Int(3),
+        },
+    )
+    .unwrap();
+    let reset_response = IpcClient::send(
+        &socket,
+        &Request::Reset {
+            key: Some("sound.volume".to_string()),
+        },
+    )
+    .unwrap();
     assert!(matches!(reset_response, Response::Ok(_)));
 
-    let get_response = IpcClient::send(&socket, &Request::Get { key: "sound.volume".to_string() }).unwrap();
+    let get_response = IpcClient::send(
+        &socket,
+        &Request::Get {
+            key: "sound.volume".to_string(),
+        },
+    )
+    .unwrap();
     match get_response {
         Response::Ok(encoded) => assert_eq!(Value::decode(&encoded).unwrap(), Value::Int(50)),
         other => panic!("expected Ok, got {other:?}"),
@@ -121,7 +167,10 @@ fn whoami_reports_the_real_connecting_uid() {
         // actually round-trips through a real socket, not just a
         // same-process UnixStream::pair() (see ipc::permissions's own
         // unit test for that narrower check).
-        Response::Ok(msg) => assert!(msg.contains(&format!("uid {expected_uid}")), "unexpected whoami: {msg}"),
+        Response::Ok(msg) => assert!(
+            msg.contains(&format!("uid {expected_uid}")),
+            "unexpected whoami: {msg}"
+        ),
         other => panic!("expected Ok, got {other:?}"),
     }
 
@@ -138,9 +187,18 @@ fn user_level_setting_succeeds_regardless_of_peer_privilege() {
     let socket = temp_socket_path("user-level-peer");
     spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
 
-    let response =
-        IpcClient::send(&socket, &Request::Set { key: "sound.volume".to_string(), value: Value::Int(12) }).unwrap();
-    assert!(matches!(response, Response::Ok(_)), "unexpected response: {response:?}");
+    let response = IpcClient::send(
+        &socket,
+        &Request::Set {
+            key: "sound.volume".to_string(),
+            value: Value::Int(12),
+        },
+    )
+    .unwrap();
+    assert!(
+        matches!(response, Response::Ok(_)),
+        "unexpected response: {response:?}"
+    );
 
     std::fs::remove_dir_all(socket.parent().unwrap()).ok();
 }

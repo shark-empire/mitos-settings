@@ -17,11 +17,15 @@ pub struct Store {
 
 impl Store {
     pub fn user() -> Self {
-        Store { path: paths::user_config_path() }
+        Store {
+            path: paths::user_config_path(),
+        }
     }
 
     pub fn system() -> Self {
-        Store { path: paths::system_config_path() }
+        Store {
+            path: paths::system_config_path(),
+        }
     }
 
     pub fn at(path: impl Into<PathBuf>) -> Self {
@@ -53,7 +57,10 @@ impl Store {
     }
 
     pub fn save(&self, values: &HashMap<String, Value>) -> io::Result<()> {
-        let mut doc = loader::RawDocument { version: loader::CURRENT_VERSION, entries: Default::default() };
+        let mut doc = loader::RawDocument {
+            version: loader::CURRENT_VERSION,
+            entries: Default::default(),
+        };
         for (key, value) in values {
             doc.entries.insert(key.clone(), value.encode());
         }
@@ -67,7 +74,8 @@ mod tests {
 
     #[test]
     fn save_then_load_round_trips_values() {
-        let dir = std::env::temp_dir().join(format!("mitos-persistence-test-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("mitos-persistence-test-{}", std::process::id()));
         let store = Store::at(dir.join("settings.conf"));
 
         let mut values = HashMap::new();
@@ -77,7 +85,10 @@ mod tests {
 
         let reloaded = store.load().unwrap();
         assert_eq!(reloaded.get("display.brightness"), Some(&Value::Int(80)));
-        assert_eq!(reloaded.get("network.wifi_enabled"), Some(&Value::Bool(true)));
+        assert_eq!(
+            reloaded.get("network.wifi_enabled"),
+            Some(&Value::Bool(true))
+        );
 
         std::fs::remove_dir_all(dir).ok();
     }

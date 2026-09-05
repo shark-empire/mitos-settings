@@ -29,7 +29,11 @@ use std::path::PathBuf;
 pub enum SettingsError {
     UnknownKey(String),
     Invalid(ValidationError),
-    PermissionDenied { key: String, required: PrivilegeLevel, held: PrivilegeLevel },
+    PermissionDenied {
+        key: String,
+        required: PrivilegeLevel,
+        held: PrivilegeLevel,
+    },
     Io(std::io::Error),
     Daemon(String),
 }
@@ -39,7 +43,11 @@ impl fmt::Display for SettingsError {
         match self {
             SettingsError::UnknownKey(k) => write!(f, "unknown setting '{k}'"),
             SettingsError::Invalid(e) => write!(f, "{e}"),
-            SettingsError::PermissionDenied { key, required, held } => write!(
+            SettingsError::PermissionDenied {
+                key,
+                required,
+                held,
+            } => write!(
                 f,
                 "'{key}' requires {required} privileges (you currently have {held}); \
                  re-run with sudo, or make sure the mitos-settings daemon is running"
@@ -103,7 +111,11 @@ impl SettingsManager {
     /// to mutating process-global environment variables, which doesn't
     /// play well with tests running in parallel. Does *not* project to
     /// home.conf unless `with_home_conf_path` is also called.
-    pub fn with_stores(mode: Mode, user_store: Store, system_store: Store) -> Result<Self, SettingsError> {
+    pub fn with_stores(
+        mode: Mode,
+        user_store: Store,
+        system_store: Store,
+    ) -> Result<Self, SettingsError> {
         let mut schema = Schema::new();
         categories::register_all(&mut schema);
 
@@ -141,7 +153,10 @@ impl SettingsManager {
     }
 
     pub fn get(&self, key: &str) -> Result<&Value, SettingsError> {
-        let spec = self.schema.get(key).ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?;
+        let spec = self
+            .schema
+            .get(key)
+            .ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?;
         Ok(self.values.get(key).unwrap_or(&spec.default))
     }
 
@@ -154,12 +169,26 @@ impl SettingsManager {
     /// connecting peer (identified via `SO_PEERCRED`, not the daemon's own
     /// root identity). This is what actually enforces privilege for
     /// requests arriving over the socket — see docs/security.md.
-    pub fn set_for_peer(&mut self, key: &str, value: Value, peer: &AuthContext) -> Result<(), SettingsError> {
+    pub fn set_for_peer(
+        &mut self,
+        key: &str,
+        value: Value,
+        peer: &AuthContext,
+    ) -> Result<(), SettingsError> {
         self.set_with_context(key, value, peer)
     }
 
-    fn set_with_context(&mut self, key: &str, value: Value, ctx: &AuthContext) -> Result<(), SettingsError> {
-        let spec = self.schema.get(key).ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?.clone();
+    fn set_with_context(
+        &mut self,
+        key: &str,
+        value: Value,
+        ctx: &AuthContext,
+    ) -> Result<(), SettingsError> {
+        let spec = self
+            .schema
+            .get(key)
+            .ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?
+            .clone();
         validation::validate(&spec, &value).map_err(SettingsError::Invalid)?;
 
         let held = ctx.level();
@@ -167,7 +196,11 @@ impl SettingsManager {
             if self.mode == Mode::Standalone {
                 return self.set_via_daemon(key, &value);
             }
-            return Err(SettingsError::PermissionDenied { key: key.to_string(), required: spec.privilege, held });
+            return Err(SettingsError::PermissionDenied {
+                key: key.to_string(),
+                required: spec.privilege,
+                held,
+            });
         }
 
         self.values.insert(key.to_string(), value.clone());
@@ -176,18 +209,31 @@ impl SettingsManager {
         if let Some(path) = self.home_conf_path.clone() {
             services::home_conf::sync_if_relevant(key, self, &path);
         }
-        self.events.publish(Event::SettingChanged { key: key.to_string(), value });
+        self.events.publish(Event::SettingChanged {
+            key: key.to_string(),
+            value,
+        });
         Ok(())
     }
 
     pub fn reset(&mut self, key: &str) -> Result<(), SettingsError> {
-        let default = self.schema.get(key).ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?.default.clone();
+        let default = self
+            .schema
+            .get(key)
+            .ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?
+            .default
+            .clone();
         self.set(key, default)
     }
 
     /// Peer-authorized counterpart to `reset` — see `set_for_peer`.
     pub fn reset_for_peer(&mut self, key: &str, peer: &AuthContext) -> Result<(), SettingsError> {
-        let default = self.schema.get(key).ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?.default.clone();
+        let default = self
+            .schema
+            .get(key)
+            .ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?
+            .default
+            .clone();
         self.set_for_peer(key, default, peer)
     }
 
@@ -195,7 +241,12 @@ impl SettingsManager {
     /// this process can't reach (no daemon running, not an admin) is
     /// skipped rather than aborting the whole operation.
     pub fn reset_all(&mut self) -> Result<(), SettingsError> {
-        let keys: Vec<&'static str> = self.schema.all().filter(|s| !s.read_only).map(|s| s.key).collect();
+        let keys: Vec<&'static str> = self
+            .schema
+            .all()
+            .filter(|s| !s.read_only)
+            .map(|s| s.key)
+            .collect();
         for key in keys {
             let _ = self.reset(key);
         }
@@ -204,7 +255,12 @@ impl SettingsManager {
 
     /// Peer-authorized counterpart to `reset_all` — see `set_for_peer`.
     pub fn reset_all_for_peer(&mut self, peer: &AuthContext) -> Result<(), SettingsError> {
-        let keys: Vec<&'static str> = self.schema.all().filter(|s| !s.read_only).map(|s| s.key).collect();
+        let keys: Vec<&'static str> = self
+            .schema
+            .all()
+            .filter(|s| !s.read_only)
+            .map(|s| s.key)
+            .collect();
         for key in keys {
             let _ = self.reset_for_peer(key, peer);
         }
@@ -213,7 +269,11 @@ impl SettingsManager {
 
     fn persist(&self, spec: &SettingSpec) -> Result<(), SettingsError> {
         let is_system_scope = spec.privilege > PrivilegeLevel::User;
-        let store = if is_system_scope { &self.system_store } else { &self.user_store };
+        let store = if is_system_scope {
+            &self.system_store
+        } else {
+            &self.user_store
+        };
 
         let subset: HashMap<String, Value> = self
             .values
@@ -247,7 +307,10 @@ impl SettingsManager {
         match response {
             Response::Ok(_) => {
                 self.values.insert(key.to_string(), value.clone());
-                self.events.publish(Event::SettingChanged { key: key.to_string(), value: value.clone() });
+                self.events.publish(Event::SettingChanged {
+                    key: key.to_string(),
+                    value: value.clone(),
+                });
                 Ok(())
             }
             Response::Err(msg) => Err(SettingsError::Daemon(msg)),
@@ -268,7 +331,8 @@ pub(crate) mod test_support {
     /// shared path or a process-global environment variable.
     pub fn isolated_manager(mode: Mode) -> (SettingsManager, std::path::PathBuf) {
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("mitos-settings-test-{}-{n}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("mitos-settings-test-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let user_store = Store::at(dir.join("user.conf"));
         let system_store = Store::at(dir.join("system.conf"));
@@ -300,7 +364,9 @@ mod tests {
     #[test]
     fn set_rejects_unknown_key() {
         let (mut manager, dir) = isolated_manager(Mode::Standalone);
-        let err = manager.set("nonexistent.key", Value::Bool(true)).unwrap_err();
+        let err = manager
+            .set("nonexistent.key", Value::Bool(true))
+            .unwrap_err();
         assert!(matches!(err, SettingsError::UnknownKey(_)));
         std::fs::remove_dir_all(dir).ok();
     }
@@ -337,10 +403,18 @@ mod tests {
     #[test]
     fn set_for_peer_rejects_an_unprivileged_peer_regardless_of_the_daemons_own_uid() {
         let (mut manager, dir) = isolated_manager(Mode::DaemonAuthority);
-        let unprivileged_peer = AuthContext { uid: 65534, username: "nobody".to_string(), is_admin: false };
+        let unprivileged_peer = AuthContext {
+            uid: 65534,
+            username: "nobody".to_string(),
+            is_admin: false,
+        };
 
         let err = manager
-            .set_for_peer("network.proxy_mode", Value::Str("manual".into()), &unprivileged_peer)
+            .set_for_peer(
+                "network.proxy_mode",
+                Value::Str("manual".into()),
+                &unprivileged_peer,
+            )
             .unwrap_err();
 
         assert!(matches!(err, SettingsError::PermissionDenied { .. }));
@@ -350,11 +424,24 @@ mod tests {
     #[test]
     fn set_for_peer_allows_a_privileged_peer() {
         let (mut manager, dir) = isolated_manager(Mode::DaemonAuthority);
-        let admin_peer = AuthContext { uid: 1000, username: "amy".to_string(), is_admin: true };
+        let admin_peer = AuthContext {
+            uid: 1000,
+            username: "amy".to_string(),
+            is_admin: true,
+        };
 
-        manager.set_for_peer("network.proxy_mode", Value::Str("manual".into()), &admin_peer).unwrap();
+        manager
+            .set_for_peer(
+                "network.proxy_mode",
+                Value::Str("manual".into()),
+                &admin_peer,
+            )
+            .unwrap();
 
-        assert_eq!(manager.get("network.proxy_mode").unwrap(), &Value::Str("manual".into()));
+        assert_eq!(
+            manager.get("network.proxy_mode").unwrap(),
+            &Value::Str("manual".into())
+        );
         std::fs::remove_dir_all(dir).ok();
     }
 
@@ -365,11 +452,24 @@ mod tests {
         // itself happens to run as. Root peer should always succeed even
         // though `isolated_manager`'s own ctx is whatever the sandbox is.
         let (mut manager, dir) = isolated_manager(Mode::DaemonAuthority);
-        let root_peer = AuthContext { uid: 0, username: "root".to_string(), is_admin: true };
+        let root_peer = AuthContext {
+            uid: 0,
+            username: "root".to_string(),
+            is_admin: true,
+        };
 
-        manager.set_for_peer("security.automatic_security_updates", Value::Bool(false), &root_peer).unwrap();
+        manager
+            .set_for_peer(
+                "security.automatic_security_updates",
+                Value::Bool(false),
+                &root_peer,
+            )
+            .unwrap();
 
-        assert_eq!(manager.get("security.automatic_security_updates").unwrap(), &Value::Bool(false));
+        assert_eq!(
+            manager.get("security.automatic_security_updates").unwrap(),
+            &Value::Bool(false)
+        );
         std::fs::remove_dir_all(dir).ok();
     }
 }

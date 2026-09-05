@@ -16,7 +16,14 @@ impl Category for PrivacyCategory {
         "preferences-system-privacy"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Location", "Camera", "Microphone", "Notifications", "Recent files", "Application permissions"]
+        &[
+            "Location",
+            "Camera",
+            "Microphone",
+            "Notifications",
+            "Recent files",
+            "Application permissions",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {

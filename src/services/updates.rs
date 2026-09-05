@@ -21,9 +21,14 @@ impl PackageManager {
 }
 
 pub fn detect() -> Option<PackageManager> {
-    [PackageManager::Apt, PackageManager::Dnf, PackageManager::Pacman, PackageManager::Zypper]
-        .into_iter()
-        .find(|pm| platform::command_exists(pm.binary()))
+    [
+        PackageManager::Apt,
+        PackageManager::Dnf,
+        PackageManager::Pacman,
+        PackageManager::Zypper,
+    ]
+    .into_iter()
+    .find(|pm| platform::command_exists(pm.binary()))
 }
 
 /// Read-only "how many updates are pending" check.
@@ -36,12 +41,25 @@ pub fn detect() -> Option<PackageManager> {
 pub fn check_pending() -> Option<usize> {
     match detect()? {
         PackageManager::Apt => {
-            let out = Command::new("apt").args(["list", "--upgradable"]).output().ok()?;
-            Some(String::from_utf8_lossy(&out.stdout).lines().filter(|l| l.contains('/')).count())
+            let out = Command::new("apt")
+                .args(["list", "--upgradable"])
+                .output()
+                .ok()?;
+            Some(
+                String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .filter(|l| l.contains('/'))
+                    .count(),
+            )
         }
         PackageManager::Dnf => {
             let out = Command::new("dnf").arg("check-update").output().ok()?;
-            Some(String::from_utf8_lossy(&out.stdout).lines().filter(|l| l.contains('.')).count())
+            Some(
+                String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .filter(|l| l.contains('.'))
+                    .count(),
+            )
         }
         PackageManager::Pacman => {
             let out = Command::new("pacman").arg("-Qu").output().ok()?;
@@ -49,7 +67,12 @@ pub fn check_pending() -> Option<usize> {
         }
         PackageManager::Zypper => {
             let out = Command::new("zypper").arg("list-updates").output().ok()?;
-            Some(String::from_utf8_lossy(&out.stdout).lines().filter(|l| l.starts_with('v')).count())
+            Some(
+                String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .filter(|l| l.starts_with('v'))
+                    .count(),
+            )
         }
     }
 }

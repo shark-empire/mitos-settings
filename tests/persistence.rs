@@ -9,7 +9,10 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 fn temp_path(label: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("mitos-persistence-itest-{label}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "mitos-persistence-itest-{label}-{}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&dir).unwrap();
     dir.join("settings.conf")
 }
@@ -24,7 +27,10 @@ fn store_round_trips_every_value_kind() {
     values.insert("a.int".to_string(), Value::Int(-7));
     values.insert("a.float".to_string(), Value::Float(1.5));
     values.insert("a.str".to_string(), Value::Str("hello, world".to_string()));
-    values.insert("a.strlist".to_string(), Value::StrList(vec!["x".into(), "y".into()]));
+    values.insert(
+        "a.strlist".to_string(),
+        Value::StrList(vec!["x".into(), "y".into()]),
+    );
 
     store.save(&values).unwrap();
     let reloaded = store.load().unwrap();
@@ -49,7 +55,14 @@ fn legacy_v1_wifi_key_is_migrated_on_load() {
     let path = temp_path("migration");
     let mut entries = BTreeMap::new();
     entries.insert("wifi.enabled".to_string(), "bool:true".to_string());
-    writer::write(&path, &RawDocument { version: 1, entries }).unwrap();
+    writer::write(
+        &path,
+        &RawDocument {
+            version: 1,
+            entries,
+        },
+    )
+    .unwrap();
 
     let store = Store::at(&path);
     let values = store.load().unwrap();
@@ -67,9 +80,15 @@ fn legacy_v1_wifi_key_is_migrated_on_load() {
 #[test]
 fn writer_produces_atomic_no_partial_files() {
     let path = temp_path("atomic");
-    let doc = RawDocument { version: loader::CURRENT_VERSION, entries: Default::default() };
+    let doc = RawDocument {
+        version: loader::CURRENT_VERSION,
+        entries: Default::default(),
+    };
     writer::write(&path, &doc).unwrap();
     assert!(path.exists());
-    assert!(!path.with_extension("tmp").exists(), "temp file should be renamed away, not left behind");
+    assert!(
+        !path.with_extension("tmp").exists(),
+        "temp file should be renamed away, not left behind"
+    );
     std::fs::remove_dir_all(path.parent().unwrap()).ok();
 }

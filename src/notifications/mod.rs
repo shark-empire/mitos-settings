@@ -10,5 +10,8 @@ pub use events::{Event, EventBus};
 /// Silently does nothing otherwise — a missing notification daemon should
 /// never be a reason to fail a settings change.
 pub fn toast(summary: &str, body: &str) {
-    let _ = std::process::Command::new("notify-send").arg(summary).arg(body).status();
+    let _ = std::process::Command::new("notify-send")
+        .arg(summary)
+        .arg(body)
+        .status();
 }

@@ -25,18 +25,26 @@ pub fn load(path: &Path) -> io::Result<RawDocument> {
     let contents = match fs::read_to_string(path) {
         Ok(c) => c,
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            return Ok(RawDocument { version: CURRENT_VERSION, entries: BTreeMap::new() })
+            return Ok(RawDocument {
+                version: CURRENT_VERSION,
+                entries: BTreeMap::new(),
+            })
         }
         Err(e) => return Err(e),
     };
 
-    let mut doc = RawDocument { version: 1, entries: BTreeMap::new() };
+    let mut doc = RawDocument {
+        version: 1,
+        entries: BTreeMap::new(),
+    };
     for line in contents.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let Some((key, value)) = line.split_once('=') else { continue };
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
         let key = key.trim();
         if key == "__version__" {
             doc.version = value.trim().parse().unwrap_or(1);

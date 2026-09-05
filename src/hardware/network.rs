@@ -8,7 +8,9 @@ pub struct NetIface {
 
 pub fn list() -> Vec<NetIface> {
     let mut ifaces = Vec::new();
-    let Ok(entries) = fs::read_dir("/sys/class/net") else { return ifaces };
+    let Ok(entries) = fs::read_dir("/sys/class/net") else {
+        return ifaces;
+    };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         if name == "lo" {

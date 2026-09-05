@@ -13,7 +13,9 @@ pub fn set_powered(on: bool) -> io::Result<()> {
 }
 
 pub fn list_devices() -> Vec<PairedDevice> {
-    let Ok(output) = Command::new("bluetoothctl").arg("devices").output() else { return Vec::new() };
+    let Ok(output) = Command::new("bluetoothctl").arg("devices").output() else {
+        return Vec::new();
+    };
     String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter_map(|line| {
@@ -28,10 +30,16 @@ pub fn list_devices() -> Vec<PairedDevice> {
 }
 
 fn run(args: &[&str]) -> io::Result<()> {
-    let status = Command::new("bluetoothctl").args(args).stdout(Stdio::null()).status()?;
+    let status = Command::new("bluetoothctl")
+        .args(args)
+        .stdout(Stdio::null())
+        .status()?;
     if status.success() {
         Ok(())
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "bluetoothctl reported failure"))
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "bluetoothctl reported failure",
+        ))
     }
 }

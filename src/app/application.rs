@@ -21,7 +21,11 @@ pub struct Application {
 impl Application {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let manager = SettingsManager::load(Mode::Standalone)?;
-        Ok(Application { manager, nav: Navigation::new(), state: AppState::new() })
+        Ok(Application {
+            manager,
+            nav: Navigation::new(),
+            state: AppState::new(),
+        })
     }
 
     pub fn run(&mut self) {
@@ -45,7 +49,11 @@ impl Application {
             }
             Some(cat) => {
                 for spec in self.manager.schema().by_category(cat.id()) {
-                    let value = self.manager.get(spec.key).map(|v| v.to_string()).unwrap_or_default();
+                    let value = self
+                        .manager
+                        .get(spec.key)
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
                     let tag = if spec.read_only {
                         " [read-only]"
                     } else if spec.privilege > PrivilegeLevel::User {

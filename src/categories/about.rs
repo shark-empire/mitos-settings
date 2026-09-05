@@ -16,7 +16,13 @@ impl Category for AboutCategory {
         "help-about"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Version", "Kernel", "Hardware", "License", "System information"]
+        &[
+            "Version",
+            "Kernel",
+            "Hardware",
+            "License",
+            "System information",
+        ]
     }
 
     /// About has nothing to configure — it's a read-only snapshot of the
@@ -33,12 +39,18 @@ impl Category for AboutCategory {
             ("distribution", distro),
             ("version", env!("CARGO_PKG_VERSION").to_string()),
             ("kernel", kernel_version()),
-            ("cpu", summary.cpu_model.unwrap_or_else(|| "unknown".to_string())),
+            (
+                "cpu",
+                summary.cpu_model.unwrap_or_else(|| "unknown".to_string()),
+            ),
             ("cpu_cores", summary.cpu_cores.to_string()),
             ("license", "MIT".to_string()),
         ];
         if let Some(mem_kb) = summary.mem_total_kb {
-            rows.push(("memory", format!("{:.1} GiB", mem_kb as f64 / 1024.0 / 1024.0)));
+            rows.push((
+                "memory",
+                format!("{:.1} GiB", mem_kb as f64 / 1024.0 / 1024.0),
+            ));
         }
         for gpu in summary.gpu_names {
             rows.push(("gpu", gpu));
@@ -55,6 +67,10 @@ fn kernel_version() -> String {
         .filter(|o| o.status.success())
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| s.trim().to_string())
-        .or_else(|| fs::read_to_string("/proc/version").ok().map(|s| s.trim().to_string()))
+        .or_else(|| {
+            fs::read_to_string("/proc/version")
+                .ok()
+                .map(|s| s.trim().to_string())
+        })
         .unwrap_or_else(|| "unknown".to_string())
 }

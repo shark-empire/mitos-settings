@@ -1,8 +1,13 @@
 use crate::settings::manager::SettingsManager;
 
 pub fn execute(manager: &SettingsManager, args: &[String]) -> Result<String, String> {
-    let key = args.first().ok_or_else(|| "usage: mitos-settings get <key>".to_string())?;
-    manager.get(key).map(|v| v.to_string()).map_err(|e| e.to_string())
+    let key = args
+        .first()
+        .ok_or_else(|| "usage: mitos-settings get <key>".to_string())?;
+    manager
+        .get(key)
+        .map(|v| v.to_string())
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

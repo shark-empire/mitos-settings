@@ -16,7 +16,12 @@ impl Category for WallpaperCategory {
         "preferences-desktop-wallpaper"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Desktop background", "Lock screen background", "Slideshow", "Picture position"]
+        &[
+            "Desktop background",
+            "Lock screen background",
+            "Slideshow",
+            "Picture position",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {

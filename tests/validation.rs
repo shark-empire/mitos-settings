@@ -17,24 +17,39 @@ fn full_schema() -> Schema {
 #[test]
 fn range_constraints_hold_for_a_registered_setting() {
     let schema = full_schema();
-    let spec = schema.get("display.brightness").expect("display.brightness should be registered");
+    let spec = schema
+        .get("display.brightness")
+        .expect("display.brightness should be registered");
     assert!(validate(spec, &Value::Int(50)).is_ok());
-    assert!(matches!(validate(spec, &Value::Int(200)), Err(ValidationError::OutOfRange { .. })));
-    assert!(matches!(validate(spec, &Value::Int(-5)), Err(ValidationError::OutOfRange { .. })));
+    assert!(matches!(
+        validate(spec, &Value::Int(200)),
+        Err(ValidationError::OutOfRange { .. })
+    ));
+    assert!(matches!(
+        validate(spec, &Value::Int(-5)),
+        Err(ValidationError::OutOfRange { .. })
+    ));
 }
 
 #[test]
 fn choice_constraints_hold_for_a_registered_setting() {
     let schema = full_schema();
-    let spec = schema.get("theme.mode").expect("theme.mode should be registered");
+    let spec = schema
+        .get("theme.mode")
+        .expect("theme.mode should be registered");
     assert!(validate(spec, &Value::Str("dark".into())).is_ok());
-    assert!(matches!(validate(spec, &Value::Str("rainbow".into())), Err(ValidationError::NotAChoice { .. })));
+    assert!(matches!(
+        validate(spec, &Value::Str("rainbow".into())),
+        Err(ValidationError::NotAChoice { .. })
+    ));
 }
 
 #[test]
 fn type_mismatches_are_rejected() {
     let schema = full_schema();
-    let spec = schema.get("sound.volume").expect("sound.volume should be registered");
+    let spec = schema
+        .get("sound.volume")
+        .expect("sound.volume should be registered");
     assert!(matches!(
         validate(spec, &Value::Str("loud".into())),
         Err(ValidationError::TypeMismatch { .. })
@@ -44,9 +59,14 @@ fn type_mismatches_are_rejected() {
 #[test]
 fn read_only_specs_reject_every_value() {
     let schema = full_schema();
-    let spec = schema.get("security.secure_boot_status").expect("should be registered");
+    let spec = schema
+        .get("security.secure_boot_status")
+        .expect("should be registered");
     assert!(spec.read_only);
-    assert!(matches!(validate(spec, &spec.default.clone()), Err(ValidationError::ReadOnly(_))));
+    assert!(matches!(
+        validate(spec, &spec.default.clone()),
+        Err(ValidationError::ReadOnly(_))
+    ));
 }
 
 /// The strongest sanity check here: every default value shipped for every

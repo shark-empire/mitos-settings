@@ -18,7 +18,13 @@ impl Category for SecurityCategory {
         "security-high"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Firewall", "Disk encryption status", "Secure boot status", "Login security", "Security updates"]
+        &[
+            "Firewall",
+            "Disk encryption status",
+            "Secure boot status",
+            "Login security",
+            "Security updates",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {
@@ -112,13 +118,20 @@ fn secure_boot_status() -> String {
         Ok(e) => e,
         Err(_) => return "not applicable (legacy BIOS boot)".to_string(),
     };
-    let Some(var) = entries.flatten().find(|e| e.file_name().to_string_lossy().starts_with("SecureBoot-")) else {
+    let Some(var) = entries
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("SecureBoot-"))
+    else {
         return "unknown".to_string();
     };
     match fs::read(var.path()) {
         // The first 4 bytes are EFI variable attributes; byte 5 is the value.
         Ok(bytes) if bytes.len() > 4 => {
-            if bytes[4] == 1 { "enabled".to_string() } else { "disabled".to_string() }
+            if bytes[4] == 1 {
+                "enabled".to_string()
+            } else {
+                "disabled".to_string()
+            }
         }
         _ => "unknown".to_string(),
     }
@@ -128,7 +141,10 @@ fn secure_boot_status() -> String {
 /// `lsblk`, without requiring root.
 fn disk_encryption_status() -> String {
     let has_crypt_mount = fs::read_to_string("/proc/mounts")
-        .map(|m| m.lines().any(|l| l.contains("/dev/mapper/") && l.starts_with("/dev/mapper")))
+        .map(|m| {
+            m.lines()
+                .any(|l| l.contains("/dev/mapper/") && l.starts_with("/dev/mapper"))
+        })
         .unwrap_or(false);
     if has_crypt_mount {
         "likely encrypted (dm-crypt mapping active)".to_string()

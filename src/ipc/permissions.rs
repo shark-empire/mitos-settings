@@ -59,14 +59,24 @@ const SOL_SOCKET: c_int = 1;
 const SO_PEERCRED: c_int = 17;
 
 extern "C" {
-    fn getsockopt(sockfd: c_int, level: c_int, optname: c_int, optval: *mut c_void, optlen: *mut u32) -> c_int;
+    fn getsockopt(
+        sockfd: c_int,
+        level: c_int,
+        optname: c_int,
+        optval: *mut c_void,
+        optlen: *mut u32,
+    ) -> c_int;
 }
 
 /// The kernel-verified identity of whoever is on the other end of `stream`.
 /// This is what actually backs per-connection authorization now -- not
 /// just "did they reach the socket at all".
 pub fn peer_credentials(stream: &UnixStream) -> io::Result<PeerCredentials> {
-    let mut cred = UCred { pid: 0, uid: 0, gid: 0 };
+    let mut cred = UCred {
+        pid: 0,
+        uid: 0,
+        gid: 0,
+    };
     let mut len = std::mem::size_of::<UCred>() as u32;
 
     // SAFETY: `getsockopt` is given a valid, open socket fd (borrowed from
@@ -77,13 +87,23 @@ pub fn peer_credentials(stream: &UnixStream) -> io::Result<PeerCredentials> {
     // it never reads `cred` before writing it, so leaving it
     // zero-initialized above is safe either way.
     let ret = unsafe {
-        getsockopt(stream.as_raw_fd(), SOL_SOCKET, SO_PEERCRED, &mut cred as *mut UCred as *mut c_void, &mut len)
+        getsockopt(
+            stream.as_raw_fd(),
+            SOL_SOCKET,
+            SO_PEERCRED,
+            &mut cred as *mut UCred as *mut c_void,
+            &mut len,
+        )
     };
 
     if ret != 0 {
         return Err(io::Error::last_os_error());
     }
-    Ok(PeerCredentials { pid: cred.pid, uid: cred.uid, gid: cred.gid })
+    Ok(PeerCredentials {
+        pid: cred.pid,
+        uid: cred.uid,
+        gid: cred.gid,
+    })
 }
 
 #[cfg(test)]

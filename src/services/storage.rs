@@ -9,7 +9,9 @@ pub struct MountInfo {
 }
 
 pub fn list_mounts() -> Vec<MountInfo> {
-    let Ok(content) = std::fs::read_to_string("/proc/mounts") else { return Vec::new() };
+    let Ok(content) = std::fs::read_to_string("/proc/mounts") else {
+        return Vec::new();
+    };
     content
         .lines()
         .filter_map(|line| {
@@ -17,7 +19,11 @@ pub fn list_mounts() -> Vec<MountInfo> {
             let device = parts.next()?.to_string();
             let target = parts.next()?.to_string();
             let fstype = parts.next()?.to_string();
-            (device.starts_with('/') || device == "tmpfs").then_some(MountInfo { device, target, fstype })
+            (device.starts_with('/') || device == "tmpfs").then_some(MountInfo {
+                device,
+                target,
+                fstype,
+            })
         })
         .collect()
 }
@@ -43,7 +49,11 @@ pub fn disk_usage() -> io::Result<Vec<DiskUsage>> {
                 return None;
             }
             let used_percent = cols[4].trim_end_matches('%').parse().ok()?;
-            Some(DiskUsage { filesystem: cols[0].to_string(), used_percent, mount: cols[5].to_string() })
+            Some(DiskUsage {
+                filesystem: cols[0].to_string(),
+                used_percent,
+                mount: cols[5].to_string(),
+            })
         })
         .collect())
 }

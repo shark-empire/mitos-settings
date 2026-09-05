@@ -19,7 +19,10 @@ fn value_encode_decode_round_trips_every_kind() {
         Value::Int(1234),
         Value::Float(-0.5),
         Value::Str("multi\nline\\value".to_string()),
-        Value::StrList(vec!["one".into(), "two, still one item until parsed".into()]),
+        Value::StrList(vec![
+            "one".into(),
+            "two, still one item until parsed".into(),
+        ]),
     ];
     for v in values {
         let decoded = Value::decode(&v.encode()).unwrap();
@@ -53,7 +56,8 @@ fn schema_lookup_by_category_only_returns_that_categorys_keys() {
 #[test]
 fn admin_and_root_settings_exist_alongside_user_settings() {
     let schema = full_schema();
-    let levels: std::collections::HashSet<PrivilegeLevel> = schema.all().map(|s| s.privilege).collect();
+    let levels: std::collections::HashSet<PrivilegeLevel> =
+        schema.all().map(|s| s.privilege).collect();
     assert!(levels.contains(&PrivilegeLevel::User));
     assert!(levels.contains(&PrivilegeLevel::Admin));
 }
@@ -73,7 +77,10 @@ fn schema_json_export_is_stable_and_covers_every_setting() {
 
     // Every registered key shows up exactly once.
     for spec in schema.all() {
-        assert_eq!(json.matches(&format!("\"key\": \"{}\"", spec.key)).count(), 1);
+        assert_eq!(
+            json.matches(&format!("\"key\": \"{}\"", spec.key)).count(),
+            1
+        );
     }
 
     // Stable across repeated calls -- other repos may want to diff this

@@ -16,7 +16,14 @@ impl Category for SoundCategory {
         "audio-speakers"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Output device", "Input device", "Volume", "Applications", "Microphone", "Alerts"]
+        &[
+            "Output device",
+            "Input device",
+            "Volume",
+            "Applications",
+            "Microphone",
+            "Alerts",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {
@@ -76,15 +83,18 @@ impl Category for SoundCategory {
             .range(0.0, 100.0),
         );
 
-        schema.register(SettingSpec::new(
-            "sound.alert_sound",
-            "sound",
-            "Alert sound",
-            "Sound played for system alerts",
-            ValueKind::Str,
-            Value::Str("chime".into()),
-            PrivilegeLevel::User,
-        ).choices(&["chime", "glass", "ping", "none"]));
+        schema.register(
+            SettingSpec::new(
+                "sound.alert_sound",
+                "sound",
+                "Alert sound",
+                "Sound played for system alerts",
+                ValueKind::Str,
+                Value::Str("chime".into()),
+                PrivilegeLevel::User,
+            )
+            .choices(&["chime", "glass", "ping", "none"]),
+        );
     }
 
     fn live_info(&self) -> Vec<(&'static str, String)> {

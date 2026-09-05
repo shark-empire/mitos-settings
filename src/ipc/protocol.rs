@@ -16,11 +16,20 @@ use std::io::{self, BufRead, Write};
 
 #[derive(Debug, Clone)]
 pub enum Request {
-    Get { key: String },
-    Set { key: String, value: Value },
-    List { category: Option<String> },
+    Get {
+        key: String,
+    },
+    Set {
+        key: String,
+        value: Value,
+    },
+    List {
+        category: Option<String>,
+    },
     /// `None` means "reset every setting".
-    Reset { key: Option<String> },
+    Reset {
+        key: Option<String>,
+    },
     Ping,
     /// Diagnostic: ask the daemon who it thinks is asking, per
     /// `SO_PEERCRED`. Mostly useful for confirming peer-credential
@@ -60,25 +69,35 @@ impl Request {
         let mut parts = line.splitn(3, ' ');
         let verb = parts.next().unwrap_or("");
         match verb {
-            "GET" => Ok(Request::Get { key: parts.next().unwrap_or("").to_string() }),
+            "GET" => Ok(Request::Get {
+                key: parts.next().unwrap_or("").to_string(),
+            }),
             "SET" => {
                 let key = parts.next().unwrap_or("").to_string();
                 let value_raw = parts.next().unwrap_or("");
-                let value = Value::decode(value_raw).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                let value = Value::decode(value_raw)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
                 Ok(Request::Set { key, value })
             }
-            "LIST" => Ok(Request::List { category: parts.next().map(str::to_string).filter(|s| !s.is_empty()) }),
+            "LIST" => Ok(Request::List {
+                category: parts.next().map(str::to_string).filter(|s| !s.is_empty()),
+            }),
             "RESET" => {
                 let arg = parts.next().unwrap_or("");
                 if arg.is_empty() || arg == "--all" {
                     Ok(Request::Reset { key: None })
                 } else {
-                    Ok(Request::Reset { key: Some(arg.to_string()) })
+                    Ok(Request::Reset {
+                        key: Some(arg.to_string()),
+                    })
                 }
             }
             "PING" => Ok(Request::Ping),
             "WHOAMI" => Ok(Request::WhoAmI),
-            other => Err(io::Error::new(io::ErrorKind::InvalidData, format!("unknown verb '{other}'"))),
+            other => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unknown verb '{other}'"),
+            )),
         }
     }
 }
@@ -124,7 +143,10 @@ impl Response {
             }
             return Ok(Response::Data(rows));
         }
-        Err(io::Error::new(io::ErrorKind::InvalidData, format!("malformed response '{first}'")))
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("malformed response '{first}'"),
+        ))
     }
 }
 
@@ -136,11 +158,20 @@ mod tests {
     #[test]
     fn request_round_trips() {
         let requests = vec![
-            Request::Get { key: "display.brightness".into() },
-            Request::Set { key: "sound.volume".into(), value: Value::Int(50) },
-            Request::List { category: Some("network".into()) },
+            Request::Get {
+                key: "display.brightness".into(),
+            },
+            Request::Set {
+                key: "sound.volume".into(),
+                value: Value::Int(50),
+            },
+            Request::List {
+                category: Some("network".into()),
+            },
             Request::List { category: None },
-            Request::Reset { key: Some("sound.volume".into()) },
+            Request::Reset {
+                key: Some("sound.volume".into()),
+            },
             Request::Reset { key: None },
             Request::Ping,
             Request::WhoAmI,
@@ -164,7 +195,10 @@ mod tests {
 
     #[test]
     fn data_response_round_trips() {
-        let rows = vec![("a".to_string(), "int:1".to_string()), ("b".to_string(), "bool:true".to_string())];
+        let rows = vec![
+            ("a".to_string(), "int:1".to_string()),
+            ("b".to_string(), "bool:true".to_string()),
+        ];
         let mut buf = Vec::new();
         Response::Data(rows.clone()).write_to(&mut buf).unwrap();
         let parsed = Response::read_from(Cursor::new(buf)).unwrap();

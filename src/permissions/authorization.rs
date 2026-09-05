@@ -30,7 +30,11 @@ impl AuthContext {
     /// Fallback context used only if identity lookup fails outright (e.g.
     /// `id` is missing). Treated as the least-privileged possible caller.
     fn unknown() -> Self {
-        AuthContext { uid: u32::MAX, username: "unknown".to_string(), is_admin: false }
+        AuthContext {
+            uid: u32::MAX,
+            username: "unknown".to_string(),
+            is_admin: false,
+        }
     }
 }
 
@@ -39,11 +43,17 @@ pub fn current_context() -> AuthContext {
     let Some(uid) = run("id", &["-u"]).and_then(|s| s.trim().parse::<u32>().ok()) else {
         return AuthContext::unknown();
     };
-    let username = run("id", &["-un"]).map(|s| s.trim().to_string()).unwrap_or_else(|| "unknown".into());
+    let username = run("id", &["-un"])
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "unknown".into());
     let groups = run("id", &["-Gn"]).unwrap_or_default();
     let is_admin = is_admin_group_list(&groups) || uid == 0;
 
-    AuthContext { uid, username, is_admin }
+    AuthContext {
+        uid,
+        username,
+        is_admin,
+    }
 }
 
 /// Resolves the identity of an *arbitrary* uid — not the current process.
@@ -54,15 +64,25 @@ pub fn current_context() -> AuthContext {
 /// almost every time.
 pub fn context_for_uid(uid: u32) -> AuthContext {
     if uid == 0 {
-        return AuthContext { uid: 0, username: "root".to_string(), is_admin: true };
+        return AuthContext {
+            uid: 0,
+            username: "root".to_string(),
+            is_admin: true,
+        };
     }
     let username = username_for_uid(uid).unwrap_or_else(|| uid.to_string());
     let groups = run("id", &["-Gn", &username]).unwrap_or_default();
-    AuthContext { uid, is_admin: is_admin_group_list(&groups), username }
+    AuthContext {
+        uid,
+        is_admin: is_admin_group_list(&groups),
+        username,
+    }
 }
 
 fn is_admin_group_list(groups: &str) -> bool {
-    groups.split_whitespace().any(|g| matches!(g, "sudo" | "wheel" | "admin" | "mitos-admin"))
+    groups
+        .split_whitespace()
+        .any(|g| matches!(g, "sudo" | "wheel" | "admin" | "mitos-admin"))
 }
 
 /// Looks up a username by uid via `/etc/passwd` directly, rather than
@@ -90,13 +110,25 @@ mod tests {
 
     #[test]
     fn level_matches_uid_and_group() {
-        let ctx = AuthContext { uid: 0, username: "root".into(), is_admin: true };
+        let ctx = AuthContext {
+            uid: 0,
+            username: "root".into(),
+            is_admin: true,
+        };
         assert_eq!(ctx.level(), PrivilegeLevel::Root);
 
-        let ctx = AuthContext { uid: 1000, username: "amy".into(), is_admin: true };
+        let ctx = AuthContext {
+            uid: 1000,
+            username: "amy".into(),
+            is_admin: true,
+        };
         assert_eq!(ctx.level(), PrivilegeLevel::Admin);
 
-        let ctx = AuthContext { uid: 1000, username: "amy".into(), is_admin: false };
+        let ctx = AuthContext {
+            uid: 1000,
+            username: "amy".into(),
+            is_admin: false,
+        };
         assert_eq!(ctx.level(), PrivilegeLevel::User);
     }
 

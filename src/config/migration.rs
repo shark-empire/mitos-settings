@@ -30,20 +30,29 @@ mod tests {
     fn renames_legacy_wifi_key() {
         let mut entries = BTreeMap::new();
         entries.insert("wifi.enabled".to_string(), "bool:true".to_string());
-        let doc = RawDocument { version: 1, entries };
+        let doc = RawDocument {
+            version: 1,
+            entries,
+        };
 
         let migrated = migrate(doc);
 
         assert_eq!(migrated.version, CURRENT_VERSION);
         assert!(!migrated.entries.contains_key("wifi.enabled"));
-        assert_eq!(migrated.entries.get("network.wifi_enabled").unwrap(), "bool:true");
+        assert_eq!(
+            migrated.entries.get("network.wifi_enabled").unwrap(),
+            "bool:true"
+        );
     }
 
     #[test]
     fn current_version_doc_is_left_untouched() {
         let mut entries = BTreeMap::new();
         entries.insert("display.brightness".to_string(), "int:80".to_string());
-        let doc = RawDocument { version: CURRENT_VERSION, entries: entries.clone() };
+        let doc = RawDocument {
+            version: CURRENT_VERSION,
+            entries: entries.clone(),
+        };
         let migrated = migrate(doc);
         assert_eq!(migrated.entries, entries);
     }

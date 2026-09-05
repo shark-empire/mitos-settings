@@ -19,7 +19,9 @@ pub struct EventBus {
 
 impl EventBus {
     pub fn new() -> Self {
-        EventBus { subscribers: Mutex::new(Vec::new()) }
+        EventBus {
+            subscribers: Mutex::new(Vec::new()),
+        }
     }
 
     /// Returns a receiver that will get every event published from this
@@ -27,7 +29,10 @@ impl EventBus {
     /// `publish` notices the closed channel and prunes it).
     pub fn subscribe(&self) -> Receiver<Event> {
         let (tx, rx) = channel();
-        self.subscribers.lock().unwrap_or_else(|e| e.into_inner()).push(tx);
+        self.subscribers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(tx);
         rx
     }
 
@@ -37,7 +42,10 @@ impl EventBus {
     }
 
     pub fn subscriber_count(&self) -> usize {
-        self.subscribers.lock().unwrap_or_else(|e| e.into_inner()).len()
+        self.subscribers
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .len()
     }
 }
 
@@ -55,7 +63,10 @@ mod tests {
     fn subscribers_receive_published_events() {
         let bus = EventBus::new();
         let rx = bus.subscribe();
-        bus.publish(Event::SettingChanged { key: "sound.volume".into(), value: Value::Int(50) });
+        bus.publish(Event::SettingChanged {
+            key: "sound.volume".into(),
+            value: Value::Int(50),
+        });
         let event = rx.recv().unwrap();
         match event {
             Event::SettingChanged { key, value } => {

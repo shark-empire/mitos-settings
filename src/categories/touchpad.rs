@@ -16,7 +16,13 @@ impl Category for TouchpadCategory {
         "input-touchpad"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Natural scrolling", "Tap-to-click", "Two-finger scroll", "Gestures", "Disable while typing"]
+        &[
+            "Natural scrolling",
+            "Tap-to-click",
+            "Two-finger scroll",
+            "Gestures",
+            "Disable while typing",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {
@@ -85,6 +91,9 @@ impl Category for TouchpadCategory {
     }
 
     fn live_info(&self) -> Vec<(&'static str, String)> {
-        crate::hardware::touchpad::list().into_iter().map(|d| ("device", d.name)).collect()
+        crate::hardware::touchpad::list()
+            .into_iter()
+            .map(|d| ("device", d.name))
+            .collect()
     }
 }

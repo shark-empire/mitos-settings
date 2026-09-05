@@ -139,8 +139,14 @@ impl Value {
                 .parse::<bool>()
                 .map(Value::Bool)
                 .map_err(|e| e.to_string()),
-            "int" => data.parse::<i64>().map(Value::Int).map_err(|e| e.to_string()),
-            "float" => data.parse::<f64>().map(Value::Float).map_err(|e| e.to_string()),
+            "int" => data
+                .parse::<i64>()
+                .map(Value::Int)
+                .map_err(|e| e.to_string()),
+            "float" => data
+                .parse::<f64>()
+                .map(Value::Float)
+                .map_err(|e| e.to_string()),
             "str" => Ok(Value::Str(data.replace("\\n", "\n").replace("\\\\", "\\"))),
             "strlist" => Ok(Value::StrList(if data.is_empty() {
                 Vec::new()
@@ -186,14 +192,23 @@ mod tests {
 
     #[test]
     fn parses_bool_synonyms() {
-        assert_eq!(Value::parse(ValueKind::Bool, "on").unwrap(), Value::Bool(true));
-        assert_eq!(Value::parse(ValueKind::Bool, "OFF").unwrap(), Value::Bool(false));
+        assert_eq!(
+            Value::parse(ValueKind::Bool, "on").unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            Value::parse(ValueKind::Bool, "OFF").unwrap(),
+            Value::Bool(false)
+        );
         assert!(Value::parse(ValueKind::Bool, "maybe").is_err());
     }
 
     #[test]
     fn strlist_parses_comma_separated() {
         let v = Value::parse(ValueKind::StrList, "a, b,  c").unwrap();
-        assert_eq!(v.as_str_list().unwrap(), &["a".to_string(), "b".to_string(), "c".to_string()]);
+        assert_eq!(
+            v.as_str_list().unwrap(),
+            &["a".to_string(), "b".to_string(), "c".to_string()]
+        );
     }
 }

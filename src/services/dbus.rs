@@ -44,7 +44,10 @@ fn call_gdbus(method: &str) -> io::Result<String> {
         ])
         .output()?;
     if !output.status.success() {
-        return Err(io::Error::new(io::ErrorKind::Other, String::from_utf8_lossy(&output.stderr).trim().to_string()));
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
@@ -60,7 +63,10 @@ fn call_dbus_send(method: &str) -> io::Result<String> {
         ])
         .output()?;
     if !output.status.success() {
-        return Err(io::Error::new(io::ErrorKind::Other, String::from_utf8_lossy(&output.stderr).trim().to_string()));
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
@@ -84,13 +90,20 @@ mod tests {
 
     #[test]
     fn parses_gdbus_style_single_string_reply() {
-        assert_eq!(parse_file_picker_response("('/home/amy/Pictures/bg.png',)"), Some("/home/amy/Pictures/bg.png".to_string()));
+        assert_eq!(
+            parse_file_picker_response("('/home/amy/Pictures/bg.png',)"),
+            Some("/home/amy/Pictures/bg.png".to_string())
+        );
     }
 
     #[test]
     fn parses_dbus_send_style_reply() {
-        let raw = "method return time=123 sender=:1.5 -> dest=:1.7\n   string \"/home/amy/wall.jpg\"";
-        assert_eq!(parse_file_picker_response(raw), Some("/home/amy/wall.jpg".to_string()));
+        let raw =
+            "method return time=123 sender=:1.5 -> dest=:1.7\n   string \"/home/amy/wall.jpg\"";
+        assert_eq!(
+            parse_file_picker_response(raw),
+            Some("/home/amy/wall.jpg".to_string())
+        );
     }
 
     #[test]

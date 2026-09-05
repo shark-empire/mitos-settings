@@ -102,7 +102,11 @@ fn handle(stream: UnixStream, manager: &Arc<Mutex<SettingsManager>>) {
     let _ = response.write_to(&stream);
 }
 
-fn dispatch(request: Request, manager: &Arc<Mutex<SettingsManager>>, peer: &AuthContext) -> Response {
+fn dispatch(
+    request: Request,
+    manager: &Arc<Mutex<SettingsManager>>,
+    peer: &AuthContext,
+) -> Response {
     let mut manager = match manager.lock() {
         Ok(g) => g,
         Err(_) => return Response::Err("daemon state poisoned; restart the daemon".into()),
@@ -111,9 +115,12 @@ fn dispatch(request: Request, manager: &Arc<Mutex<SettingsManager>>, peer: &Auth
     match request {
         Request::Ping => Response::Ok("pong".into()),
 
-        Request::WhoAmI => {
-            Response::Ok(format!("{} (uid {}, {})", peer.username, peer.uid, peer.level()))
-        }
+        Request::WhoAmI => Response::Ok(format!(
+            "{} (uid {}, {})",
+            peer.username,
+            peer.uid,
+            peer.level()
+        )),
 
         Request::Get { key } => match manager.get(&key) {
             Ok(v) => Response::Ok(v.encode()),

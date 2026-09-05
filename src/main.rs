@@ -47,12 +47,18 @@ fn run_daemon() -> i32 {
     let server = match IpcServer::bind(&socket_path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("mitos-settings daemon: could not bind {}: {e}", socket_path.display());
+            eprintln!(
+                "mitos-settings daemon: could not bind {}: {e}",
+                socket_path.display()
+            );
             return 1;
         }
     };
 
-    println!("mitos-settings daemon: listening on {}", socket_path.display());
+    println!(
+        "mitos-settings daemon: listening on {}",
+        socket_path.display()
+    );
     server.run(Arc::new(Mutex::new(manager)));
     0 // unreachable in practice -- `run` serves connections forever
 }

@@ -19,8 +19,15 @@ pub fn info() -> Option<MemInfo> {
     let content = fs::read_to_string("/proc/meminfo").ok()?;
     let mut fields: HashMap<&str, u64> = HashMap::new();
     for line in content.lines() {
-        let Some((key, rest)) = line.split_once(':') else { continue };
-        if let Some(value) = rest.trim().split_whitespace().next().and_then(|v| v.parse().ok()) {
+        let Some((key, rest)) = line.split_once(':') else {
+            continue;
+        };
+        if let Some(value) = rest
+            .trim()
+            .split_whitespace()
+            .next()
+            .and_then(|v| v.parse().ok())
+        {
             fields.insert(key, value);
         }
     }

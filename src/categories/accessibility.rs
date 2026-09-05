@@ -16,7 +16,14 @@ impl Category for AccessibilityCategory {
         "preferences-desktop-accessibility"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Screen reader", "Magnification", "High contrast", "Large text", "Sticky keys", "Mouse accessibility"]
+        &[
+            "Screen reader",
+            "Magnification",
+            "High contrast",
+            "Large text",
+            "Sticky keys",
+            "Mouse accessibility",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {

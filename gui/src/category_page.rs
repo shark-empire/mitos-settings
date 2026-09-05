@@ -11,7 +11,10 @@ use mitos_settings::settings::manager::SettingsManager;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-pub fn build(category: &dyn Category, manager: &Rc<RefCell<SettingsManager>>) -> gtk::ScrolledWindow {
+pub fn build(
+    category: &dyn Category,
+    manager: &Rc<RefCell<SettingsManager>>,
+) -> gtk::ScrolledWindow {
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::None);
 

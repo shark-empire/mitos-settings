@@ -42,7 +42,10 @@ impl Category for BatteryCategory {
         batteries
             .into_iter()
             .map(|b| {
-                let percent = b.capacity_percent.map(|p| format!("{p}%")).unwrap_or_else(|| "unknown".into());
+                let percent = b
+                    .capacity_percent
+                    .map(|p| format!("{p}%"))
+                    .unwrap_or_else(|| "unknown".into());
                 let status = b.status.unwrap_or_else(|| "unknown".into());
                 ("battery", format!("{}: {percent}, {status}", b.name))
             })

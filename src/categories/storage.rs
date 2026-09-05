@@ -36,13 +36,19 @@ impl Category for StorageCategory {
         match crate::services::storage::disk_usage() {
             Ok(usages) => {
                 for u in usages {
-                    rows.push(("usage", format!("{} on {}: {}% used", u.filesystem, u.mount, u.used_percent)));
+                    rows.push((
+                        "usage",
+                        format!("{} on {}: {}% used", u.filesystem, u.mount, u.used_percent),
+                    ));
                 }
             }
             Err(e) => rows.push(("usage", format!("could not read disk usage: {e}"))),
         }
         for m in crate::services::storage::list_mounts() {
-            rows.push(("mount", format!("{} -> {} ({})", m.device, m.target, m.fstype)));
+            rows.push((
+                "mount",
+                format!("{} -> {} ({})", m.device, m.target, m.fstype),
+            ));
         }
         rows
     }

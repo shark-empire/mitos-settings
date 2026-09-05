@@ -63,11 +63,17 @@ impl Category for PrintersCategory {
     /// doesn't include a dedicated printers service or hardware file.
     fn live_info(&self) -> Vec<(&'static str, String)> {
         let Ok(output) = Command::new("lpstat").arg("-p").output() else {
-            return vec![("printers", "CUPS not available (lpstat not found)".to_string())];
+            return vec![(
+                "printers",
+                "CUPS not available (lpstat not found)".to_string(),
+            )];
         };
         let text = String::from_utf8_lossy(&output.stdout);
-        let printers: Vec<(&'static str, String)> =
-            text.lines().filter(|l| l.starts_with("printer ")).map(|l| ("printer", l.to_string())).collect();
+        let printers: Vec<(&'static str, String)> = text
+            .lines()
+            .filter(|l| l.starts_with("printer "))
+            .map(|l| ("printer", l.to_string()))
+            .collect();
         if printers.is_empty() {
             vec![("printers", "no printers configured".to_string())]
         } else {

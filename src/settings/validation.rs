@@ -71,7 +71,10 @@ pub fn validate(spec: &SettingSpec, value: &Value) -> Result<(), ValidationError
     if let Some(format) = spec.format {
         if let Some(s) = value.as_str() {
             if let Err(reason) = check_format(format, s) {
-                return Err(ValidationError::InvalidFormat { value: s.to_string(), reason });
+                return Err(ValidationError::InvalidFormat {
+                    value: s.to_string(),
+                    reason,
+                });
             }
         }
     }
@@ -82,9 +85,14 @@ pub fn validate(spec: &SettingSpec, value: &Value) -> Result<(), ValidationError
 fn check_format(format: ValueFormat, s: &str) -> Result<(), String> {
     match format {
         ValueFormat::HexColor => {
-            let hex = s.strip_prefix('#').ok_or_else(|| "hex colors must start with '#'".to_string())?;
+            let hex = s
+                .strip_prefix('#')
+                .ok_or_else(|| "hex colors must start with '#'".to_string())?;
             if !matches!(hex.len(), 3 | 6 | 8) {
-                return Err("hex colors need 3, 6, or 8 hex digits after '#' (RGB, RRGGBB, or RRGGBBAA)".to_string());
+                return Err(
+                    "hex colors need 3, 6, or 8 hex digits after '#' (RGB, RRGGBB, or RRGGBBAA)"
+                        .to_string(),
+                );
             }
             if !hex.chars().all(|c| c.is_ascii_hexdigit()) {
                 return Err("hex colors may only contain hex digits (0-9, a-f, A-F)".to_string());
@@ -120,7 +128,10 @@ mod tests {
 
     #[test]
     fn rejects_out_of_range() {
-        assert!(matches!(validate(&spec(), &Value::Int(150)), Err(ValidationError::OutOfRange { .. })));
+        assert!(matches!(
+            validate(&spec(), &Value::Int(150)),
+            Err(ValidationError::OutOfRange { .. })
+        ));
     }
 
     #[test]
@@ -153,7 +164,10 @@ mod tests {
     #[test]
     fn rejects_writes_to_read_only() {
         let s = spec().read_only();
-        assert!(matches!(validate(&s, &Value::Int(50)), Err(ValidationError::ReadOnly(_))));
+        assert!(matches!(
+            validate(&s, &Value::Int(50)),
+            Err(ValidationError::ReadOnly(_))
+        ));
     }
 
     fn hex_color_spec() -> SettingSpec {

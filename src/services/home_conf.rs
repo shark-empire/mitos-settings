@@ -56,15 +56,37 @@ pub fn sync_if_relevant(key: &str, manager: &SettingsManager, path: &Path) {
 /// correct even before any setting is changed in this run.
 pub fn write_initial(manager: &SettingsManager, path: &Path) {
     if let Err(e) = write_home_conf(manager, path) {
-        eprintln!("mitos-settings: could not write initial {}: {e}", path.display());
+        eprintln!(
+            "mitos-settings: could not write initial {}: {e}",
+            path.display()
+        );
     }
 }
 
 fn write_home_conf(manager: &SettingsManager, path: &Path) -> io::Result<()> {
-    let str_of = |key: &str| manager.get(key).ok().and_then(|v| v.as_str()).unwrap_or_default().to_string();
-    let bool_of = |key: &str| manager.get(key).ok().and_then(|v| v.as_bool()).unwrap_or(false);
+    let str_of = |key: &str| {
+        manager
+            .get(key)
+            .ok()
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let bool_of = |key: &str| {
+        manager
+            .get(key)
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    };
     let int_of = |key: &str| manager.get(key).ok().and_then(|v| v.as_int()).unwrap_or(0);
-    let float_of = |key: &str| manager.get(key).ok().and_then(|v| v.as_float()).unwrap_or(0.0);
+    let float_of = |key: &str| {
+        manager
+            .get(key)
+            .ok()
+            .and_then(|v| v.as_float())
+            .unwrap_or(0.0)
+    };
 
     // theme.mode is "light" | "dark" | "system" internally; home.conf's
     // contract only understands the first two. There's no real desktop
@@ -83,24 +105,57 @@ fn write_home_conf(manager: &SettingsManager, path: &Path) -> io::Result<()> {
 
     out.push_str("# --- Visual Theme ---\n");
     out.push_str(&format!("theme_mode = {theme_mode}\n"));
-    out.push_str(&format!("accent_color = {}\n", str_of("appearance.accent_color")));
-    out.push_str(&format!("glass_opacity = {}\n", float_of("appearance.glass_opacity")));
-    out.push_str(&format!("panel_radius = {}\n", float_of("appearance.panel_radius")));
+    out.push_str(&format!(
+        "accent_color = {}\n",
+        str_of("appearance.accent_color")
+    ));
+    out.push_str(&format!(
+        "glass_opacity = {}\n",
+        float_of("appearance.glass_opacity")
+    ));
+    out.push_str(&format!(
+        "panel_radius = {}\n",
+        float_of("appearance.panel_radius")
+    ));
 
     out.push_str("\n# --- Wallpaper ---\n");
-    out.push_str(&format!("wallpaper = {}\n", str_of("wallpaper.desktop_path")));
+    out.push_str(&format!(
+        "wallpaper = {}\n",
+        str_of("wallpaper.desktop_path")
+    ));
 
     out.push_str("\n# --- Shell Layout ---\n");
-    out.push_str(&format!("top_bar = {}\n", bool_of("appearance.top_bar_enabled")));
-    out.push_str(&format!("top_bar_height = {}\n", float_of("appearance.top_bar_height")));
+    out.push_str(&format!(
+        "top_bar = {}\n",
+        bool_of("appearance.top_bar_enabled")
+    ));
+    out.push_str(&format!(
+        "top_bar_height = {}\n",
+        float_of("appearance.top_bar_height")
+    ));
     out.push_str(&format!("dock = {}\n", bool_of("appearance.dock_enabled")));
-    out.push_str(&format!("dock_height = {}\n", float_of("appearance.dock_height")));
-    out.push_str(&format!("launcher = {}\n", bool_of("appearance.launcher_enabled")));
+    out.push_str(&format!(
+        "dock_height = {}\n",
+        float_of("appearance.dock_height")
+    ));
+    out.push_str(&format!(
+        "launcher = {}\n",
+        bool_of("appearance.launcher_enabled")
+    ));
 
     out.push_str("\n# --- File Manager Preferences ---\n");
-    out.push_str(&format!("show_hidden_files = {}\n", bool_of("applications.file_manager_show_hidden")));
-    out.push_str(&format!("enable_thumbnails = {}\n", bool_of("applications.file_manager_thumbnails_enabled")));
-    out.push_str(&format!("thumbnail_max_mb = {}\n", int_of("applications.file_manager_thumbnail_max_mb")));
+    out.push_str(&format!(
+        "show_hidden_files = {}\n",
+        bool_of("applications.file_manager_show_hidden")
+    ));
+    out.push_str(&format!(
+        "enable_thumbnails = {}\n",
+        bool_of("applications.file_manager_thumbnails_enabled")
+    ));
+    out.push_str(&format!(
+        "thumbnail_max_mb = {}\n",
+        int_of("applications.file_manager_thumbnail_max_mb")
+    ));
 
     write_atomically(path, &out)
 }
@@ -128,7 +183,10 @@ mod tests {
     use crate::settings::value::Value;
 
     fn temp_home_conf_path(label: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("mitos-home-conf-test-{label}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "mitos-home-conf-test-{label}-{}",
+            std::process::id()
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         dir.join("home.conf")
     }
@@ -142,12 +200,24 @@ mod tests {
         let contents = fs::read_to_string(&path).unwrap();
 
         for expected_key in [
-            "theme_mode", "accent_color", "glass_opacity", "panel_radius", "wallpaper", "top_bar",
-            "top_bar_height", "dock", "dock_height", "launcher", "show_hidden_files", "enable_thumbnails",
+            "theme_mode",
+            "accent_color",
+            "glass_opacity",
+            "panel_radius",
+            "wallpaper",
+            "top_bar",
+            "top_bar_height",
+            "dock",
+            "dock_height",
+            "launcher",
+            "show_hidden_files",
+            "enable_thumbnails",
             "thumbnail_max_mb",
         ] {
             assert!(
-                contents.lines().any(|l| l.trim_start().starts_with(&format!("{expected_key} ="))),
+                contents
+                    .lines()
+                    .any(|l| l.trim_start().starts_with(&format!("{expected_key} ="))),
                 "missing '{expected_key}' in generated home.conf:\n{contents}"
             );
         }
@@ -161,7 +231,9 @@ mod tests {
         let (mut manager, manager_dir) = isolated_manager(Mode::Standalone);
         let path = temp_home_conf_path("accent");
 
-        manager.set("appearance.accent_color", Value::Str("#ff0000".into())).unwrap();
+        manager
+            .set("appearance.accent_color", Value::Str("#ff0000".into()))
+            .unwrap();
         sync_if_relevant("appearance.accent_color", &manager, &path);
 
         let contents = fs::read_to_string(&path).unwrap();
@@ -177,7 +249,10 @@ mod tests {
         let path = temp_home_conf_path("unrelated");
 
         sync_if_relevant("sound.volume", &manager, &path);
-        assert!(!path.exists(), "home.conf should not be created for a key it doesn't care about");
+        assert!(
+            !path.exists(),
+            "home.conf should not be created for a key it doesn't care about"
+        );
 
         std::fs::remove_dir_all(manager_dir).ok();
         let _ = fs::remove_dir_all(path.parent().unwrap());

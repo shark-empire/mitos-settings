@@ -25,11 +25,17 @@ use std::rc::Rc;
 /// One row: label (+ description as a tooltip) on the left, the
 /// value-appropriate control on the right. Read-only settings get a plain
 /// dimmed label instead of an editable control.
-pub fn build_setting_row(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
+pub fn build_setting_row(
+    spec: &SettingSpec,
+    manager: &Rc<RefCell<SettingsManager>>,
+) -> gtk::Widget {
     let row = row_box();
 
-    let label_text =
-        if spec.privilege > PrivilegeLevel::User { format!("{} (admin)", spec.label) } else { spec.label.to_string() };
+    let label_text = if spec.privilege > PrivilegeLevel::User {
+        format!("{} (admin)", spec.label)
+    } else {
+        spec.label.to_string()
+    };
     let label = gtk::Label::new(Some(label_text.as_str()));
     label.set_halign(gtk::Align::Start);
     label.set_hexpand(true);
@@ -75,7 +81,11 @@ fn row_box() -> gtk::Box {
 }
 
 fn current_value_text(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> String {
-    manager.borrow().get(spec.key).map(|v| v.to_string()).unwrap_or_default()
+    manager
+        .borrow()
+        .get(spec.key)
+        .map(|v| v.to_string())
+        .unwrap_or_default()
 }
 
 fn build_control(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
@@ -89,7 +99,12 @@ fn build_control(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> 
 }
 
 fn build_switch(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
-    let current = manager.borrow().get(spec.key).ok().and_then(|v| v.as_bool()).unwrap_or(false);
+    let current = manager
+        .borrow()
+        .get(spec.key)
+        .ok()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     let switch = gtk::Switch::new();
     switch.set_active(current);
@@ -98,7 +113,9 @@ fn build_switch(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> g
     let key = spec.key;
     let manager = Rc::clone(manager);
     switch.connect_active_notify(move |switch| {
-        let result = manager.borrow_mut().set(key, Value::Bool(switch.is_active()));
+        let result = manager
+            .borrow_mut()
+            .set(key, Value::Bool(switch.is_active()));
         report_result(switch.upcast_ref::<gtk::Widget>(), result);
     });
 
@@ -107,8 +124,13 @@ fn build_switch(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> g
 
 fn build_dropdown(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
     let choices = spec.choices.unwrap_or(&[]);
-    let current =
-        manager.borrow().get(spec.key).ok().and_then(|v| v.as_str()).map(|s| s.to_string()).unwrap_or_default();
+    let current = manager
+        .borrow()
+        .get(spec.key)
+        .ok()
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_default();
     let current_index = choices.iter().position(|c| *c == current).unwrap_or(0) as u32;
 
     let dropdown = gtk::DropDown::from_strings(choices);
@@ -118,7 +140,9 @@ fn build_dropdown(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) ->
     let manager = Rc::clone(manager);
     let choices_owned: Vec<String> = choices.iter().map(|c| c.to_string()).collect();
     dropdown.connect_selected_notify(move |dropdown| {
-        let Some(choice) = choices_owned.get(dropdown.selected() as usize) else { return };
+        let Some(choice) = choices_owned.get(dropdown.selected() as usize) else {
+            return;
+        };
         let result = manager.borrow_mut().set(key, Value::Str(choice.clone()));
         report_result(dropdown.upcast_ref::<gtk::Widget>(), result);
     });
@@ -128,7 +152,12 @@ fn build_dropdown(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) ->
 
 fn build_int_spin(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
     let (lo, hi) = spec.range.unwrap_or((0.0, 1_000_000.0));
-    let current = manager.borrow().get(spec.key).ok().and_then(|v| v.as_int()).unwrap_or(0);
+    let current = manager
+        .borrow()
+        .get(spec.key)
+        .ok()
+        .and_then(|v| v.as_int())
+        .unwrap_or(0);
 
     let adjustment = gtk::Adjustment::new(current as f64, lo, hi, 1.0, 10.0, 0.0);
     let spin = gtk::SpinButton::new(Some(&adjustment), 1.0, 0);
@@ -136,7 +165,9 @@ fn build_int_spin(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) ->
     let key = spec.key;
     let manager = Rc::clone(manager);
     spin.connect_value_changed(move |spin| {
-        let result = manager.borrow_mut().set(key, Value::Int(spin.value() as i64));
+        let result = manager
+            .borrow_mut()
+            .set(key, Value::Int(spin.value() as i64));
         report_result(spin.upcast_ref::<gtk::Widget>(), result);
     });
 
@@ -145,7 +176,12 @@ fn build_int_spin(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) ->
 
 fn build_float_spin(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
     let (lo, hi) = spec.range.unwrap_or((0.0, 1000.0));
-    let current = manager.borrow().get(spec.key).ok().and_then(|v| v.as_float()).unwrap_or(0.0);
+    let current = manager
+        .borrow()
+        .get(spec.key)
+        .ok()
+        .and_then(|v| v.as_float())
+        .unwrap_or(0.0);
 
     let adjustment = gtk::Adjustment::new(current, lo, hi, 0.01, 0.1, 0.0);
     let spin = gtk::SpinButton::new(Some(&adjustment), 0.01, 2);
@@ -165,7 +201,11 @@ fn build_float_spin(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) 
 /// `Value::parse`'s existing splitting logic — no dedicated list-editor
 /// widget yet, see README.md).
 fn build_entry(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
-    let current = manager.borrow().get(spec.key).map(|v| v.to_string()).unwrap_or_default();
+    let current = manager
+        .borrow()
+        .get(spec.key)
+        .map(|v| v.to_string())
+        .unwrap_or_default();
 
     let entry = gtk::Entry::new();
     entry.set_text(&current);

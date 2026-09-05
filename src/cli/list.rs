@@ -33,11 +33,15 @@ fn list_categories() -> String {
 }
 
 fn list_category(manager: &SettingsManager, category_id: &str) -> Result<String, String> {
-    let category = categories::find(category_id).ok_or_else(|| format!("unknown category '{category_id}'"))?;
+    let category =
+        categories::find(category_id).ok_or_else(|| format!("unknown category '{category_id}'"))?;
 
     let mut out = String::new();
     for spec in manager.schema().by_category(category.id()) {
-        let value = manager.get(spec.key).map(|v| v.to_string()).unwrap_or_default();
+        let value = manager
+            .get(spec.key)
+            .map(|v| v.to_string())
+            .unwrap_or_default();
         out.push_str(&format!("{:<32} {}\n", spec.key, value));
     }
     for (label, value) in category.live_info() {
@@ -106,7 +110,11 @@ mod tests {
     #[test]
     fn json_flag_with_unknown_category_is_still_an_error() {
         let (manager, dir) = isolated_manager(Mode::Standalone);
-        assert!(execute(&manager, &["not-a-category".to_string(), "--json".to_string()]).is_err());
+        assert!(execute(
+            &manager,
+            &["not-a-category".to_string(), "--json".to_string()]
+        )
+        .is_err());
         std::fs::remove_dir_all(dir).ok();
     }
 }

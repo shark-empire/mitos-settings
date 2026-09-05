@@ -9,14 +9,21 @@ use mitos_settings::settings::value::Value;
 use std::path::{Path, PathBuf};
 
 fn temp_dir(label: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("mitos-settings-itest-{label}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "mitos-settings-itest-{label}-{}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
 
 fn manager_in(dir: &Path) -> SettingsManager {
-    SettingsManager::with_stores(Mode::Standalone, Store::at(dir.join("user.conf")), Store::at(dir.join("system.conf")))
-        .expect("manager should load against a fresh, empty store")
+    SettingsManager::with_stores(
+        Mode::Standalone,
+        Store::at(dir.join("user.conf")),
+        Store::at(dir.join("system.conf")),
+    )
+    .expect("manager should load against a fresh, empty store")
 }
 
 #[test]
@@ -25,7 +32,11 @@ fn every_category_registers_at_least_one_setting_except_about() {
     let manager = manager_in(&dir);
     for cat in categories::all() {
         let count = manager.schema().by_category(cat.id()).count();
-        assert!(count > 0 || cat.id() == "about", "category '{}' registered no settings", cat.id());
+        assert!(
+            count > 0 || cat.id() == "about",
+            "category '{}' registered no settings",
+            cat.id()
+        );
     }
     std::fs::remove_dir_all(dir).ok();
 }
@@ -46,8 +57,12 @@ fn set_get_reset_cycle_for_a_user_level_setting() {
 fn choice_constraints_are_enforced_through_the_manager() {
     let dir = temp_dir("choices");
     let mut manager = manager_in(&dir);
-    assert!(manager.set("power.profile", Value::Str("turbo".into())).is_err());
-    assert!(manager.set("power.profile", Value::Str("performance".into())).is_ok());
+    assert!(manager
+        .set("power.profile", Value::Str("turbo".into()))
+        .is_err());
+    assert!(manager
+        .set("power.profile", Value::Str("performance".into()))
+        .is_ok());
     std::fs::remove_dir_all(dir).ok();
 }
 
@@ -64,7 +79,9 @@ fn range_constraints_are_enforced_through_the_manager() {
 fn read_only_settings_reject_writes() {
     let dir = temp_dir("readonly");
     let mut manager = manager_in(&dir);
-    let err = manager.set("security.firewall_status", Value::Str("on".into())).unwrap_err();
+    let err = manager
+        .set("security.firewall_status", Value::Str("on".into()))
+        .unwrap_err();
     assert!(err.to_string().contains("read-only"));
     std::fs::remove_dir_all(dir).ok();
 }

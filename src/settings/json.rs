@@ -47,7 +47,14 @@ fn value_to_json(value: &Value) -> String {
         Value::Int(i) => i.to_string(),
         Value::Float(f) => f.to_string(),
         Value::Str(s) => quoted(s),
-        Value::StrList(items) => format!("[{}]", items.iter().map(|s| quoted(s)).collect::<Vec<_>>().join(", ")),
+        Value::StrList(items) => format!(
+            "[{}]",
+            items
+                .iter()
+                .map(|s| quoted(s))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
     }
 }
 
@@ -77,21 +84,40 @@ pub fn schema_to_json(schema: &Schema) -> String {
         out.push_str(&format!("      \"key\": {},\n", quoted(spec.key)));
         out.push_str(&format!("      \"category\": {},\n", quoted(spec.category)));
         out.push_str(&format!("      \"label\": {},\n", quoted(spec.label)));
-        out.push_str(&format!("      \"description\": {},\n", quoted(spec.description)));
-        out.push_str(&format!("      \"kind\": {},\n", quoted(&spec.kind.to_string())));
-        out.push_str(&format!("      \"default\": {},\n", value_to_json(&spec.default)));
-        out.push_str(&format!("      \"privilege\": {},\n", quoted(&spec.privilege.to_string())));
+        out.push_str(&format!(
+            "      \"description\": {},\n",
+            quoted(spec.description)
+        ));
+        out.push_str(&format!(
+            "      \"kind\": {},\n",
+            quoted(&spec.kind.to_string())
+        ));
+        out.push_str(&format!(
+            "      \"default\": {},\n",
+            value_to_json(&spec.default)
+        ));
+        out.push_str(&format!(
+            "      \"privilege\": {},\n",
+            quoted(&spec.privilege.to_string())
+        ));
         out.push_str(&format!("      \"read_only\": {}", spec.read_only));
 
         if let Some(choices) = spec.choices {
-            let joined = choices.iter().map(|c| quoted(c)).collect::<Vec<_>>().join(", ");
+            let joined = choices
+                .iter()
+                .map(|c| quoted(c))
+                .collect::<Vec<_>>()
+                .join(", ");
             out.push_str(&format!(",\n      \"choices\": [{joined}]"));
         }
         if let Some((lo, hi)) = spec.range {
             out.push_str(&format!(",\n      \"range\": [{lo}, {hi}]"));
         }
         if let Some(format) = spec.format {
-            out.push_str(&format!(",\n      \"format\": {}", quoted(format_name(format))));
+            out.push_str(&format!(
+                ",\n      \"format\": {}",
+                quoted(format_name(format))
+            ));
         }
 
         out.push_str("\n    }");
@@ -117,7 +143,10 @@ pub fn values_to_json(manager: &SettingsManager, category: Option<&str>) -> Stri
 
     let mut out = String::from("{\n");
     for (i, spec) in specs.iter().enumerate() {
-        let value_json = manager.get(spec.key).map(value_to_json).unwrap_or_else(|_| "null".to_string());
+        let value_json = manager
+            .get(spec.key)
+            .map(value_to_json)
+            .unwrap_or_else(|_| "null".to_string());
         out.push_str(&format!("  {}: {value_json}", quoted(spec.key)));
         if i + 1 < specs.len() {
             out.push(',');
@@ -173,7 +202,11 @@ mod tests {
         for spec in schema.all() {
             let needle = format!("\"key\": \"{}\"", spec.key);
             let count = json.matches(&needle).count();
-            assert_eq!(count, 1, "expected exactly one occurrence of {} in schema JSON, found {count}", spec.key);
+            assert_eq!(
+                count, 1,
+                "expected exactly one occurrence of {} in schema JSON, found {count}",
+                spec.key
+            );
         }
     }
 

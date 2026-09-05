@@ -16,7 +16,12 @@ impl Category for MouseCategory {
         "input-mouse"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Pointer speed", "Acceleration", "Button mapping", "Scroll speed"]
+        &[
+            "Pointer speed",
+            "Acceleration",
+            "Button mapping",
+            "Scroll speed",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {
@@ -81,6 +86,9 @@ impl Category for MouseCategory {
     }
 
     fn live_info(&self) -> Vec<(&'static str, String)> {
-        crate::hardware::mouse::list().into_iter().map(|d| ("device", d.name)).collect()
+        crate::hardware::mouse::list()
+            .into_iter()
+            .map(|d| ("device", d.name))
+            .collect()
     }
 }

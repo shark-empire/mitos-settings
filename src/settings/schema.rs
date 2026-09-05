@@ -93,7 +93,10 @@ pub struct Schema {
 
 impl Schema {
     pub fn new() -> Self {
-        Schema { specs: BTreeMap::new(), categories: Vec::new() }
+        Schema {
+            specs: BTreeMap::new(),
+            categories: Vec::new(),
+        }
     }
 
     pub fn register(&mut self, spec: SettingSpec) {
@@ -140,15 +143,18 @@ mod tests {
     #[test]
     fn register_and_lookup() {
         let mut schema = Schema::new();
-        schema.register(SettingSpec::new(
-            "display.brightness",
-            "display",
-            "Brightness",
-            "Screen brightness",
-            ValueKind::Int,
-            Value::Int(80),
-            PrivilegeLevel::User,
-        ).range(0.0, 100.0));
+        schema.register(
+            SettingSpec::new(
+                "display.brightness",
+                "display",
+                "Brightness",
+                "Screen brightness",
+                ValueKind::Int,
+                Value::Int(80),
+                PrivilegeLevel::User,
+            )
+            .range(0.0, 100.0),
+        );
 
         let spec = schema.get("display.brightness").unwrap();
         assert_eq!(spec.category, "display");

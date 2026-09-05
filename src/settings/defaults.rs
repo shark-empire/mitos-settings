@@ -6,7 +6,10 @@ use crate::settings::value::Value;
 use std::collections::HashMap;
 
 pub fn default_values(schema: &Schema) -> HashMap<String, Value> {
-    schema.all().map(|spec| (spec.key.to_string(), spec.default.clone())).collect()
+    schema
+        .all()
+        .map(|spec| (spec.key.to_string(), spec.default.clone()))
+        .collect()
 }
 
 #[cfg(test)]

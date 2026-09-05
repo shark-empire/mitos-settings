@@ -14,17 +14,27 @@ pub struct GpuInfo {
 /// the IDs as-is.
 pub fn list() -> Vec<GpuInfo> {
     let mut gpus = Vec::new();
-    let Ok(entries) = fs::read_dir("/sys/class/drm") else { return gpus };
+    let Ok(entries) = fs::read_dir("/sys/class/drm") else {
+        return gpus;
+    };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         if !name.starts_with("card") || name.contains('-') {
             continue; // skip connector pseudo-nodes like "card0-HDMI-A-1"
         }
         let device_dir = entry.path().join("device");
-        let vendor_id = fs::read_to_string(device_dir.join("vendor")).ok().map(|s| s.trim().to_string());
-        let device_id = fs::read_to_string(device_dir.join("device")).ok().map(|s| s.trim().to_string());
+        let vendor_id = fs::read_to_string(device_dir.join("vendor"))
+            .ok()
+            .map(|s| s.trim().to_string());
+        let device_id = fs::read_to_string(device_dir.join("device"))
+            .ok()
+            .map(|s| s.trim().to_string());
         if vendor_id.is_some() || device_id.is_some() {
-            gpus.push(GpuInfo { name, vendor_id, device_id });
+            gpus.push(GpuInfo {
+                name,
+                vendor_id,
+                device_id,
+            });
         }
     }
     gpus

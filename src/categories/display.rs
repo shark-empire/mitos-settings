@@ -16,7 +16,15 @@ impl Category for DisplayCategory {
         "video-display"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Resolution", "Refresh rate", "Scaling", "Brightness", "Night light", "Multiple displays", "Orientation"]
+        &[
+            "Resolution",
+            "Refresh rate",
+            "Scaling",
+            "Brightness",
+            "Night light",
+            "Multiple displays",
+            "Orientation",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {
@@ -102,14 +110,32 @@ impl Category for DisplayCategory {
                 Value::Str("landscape".into()),
                 PrivilegeLevel::User,
             )
-            .choices(&["landscape", "portrait", "landscape-flipped", "portrait-flipped"]),
+            .choices(&[
+                "landscape",
+                "portrait",
+                "landscape-flipped",
+                "portrait-flipped",
+            ]),
         );
     }
 
     fn live_info(&self) -> Vec<(&'static str, String)> {
         crate::hardware::displays::list_connectors()
             .into_iter()
-            .map(|c| ("connector", format!("{}: {}", c.name, if c.connected { "connected" } else { "disconnected" })))
+            .map(|c| {
+                (
+                    "connector",
+                    format!(
+                        "{}: {}",
+                        c.name,
+                        if c.connected {
+                            "connected"
+                        } else {
+                            "disconnected"
+                        }
+                    ),
+                )
+            })
             .collect()
     }
 }

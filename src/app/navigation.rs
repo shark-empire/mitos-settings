@@ -12,7 +12,9 @@ pub struct Navigation {
 
 impl Navigation {
     pub fn new() -> Self {
-        Navigation { breadcrumbs: Vec::new() }
+        Navigation {
+            breadcrumbs: Vec::new(),
+        }
     }
 
     pub fn push(&mut self, category_id: &str) {

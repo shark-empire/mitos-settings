@@ -16,7 +16,11 @@ impl Category for NotificationsCategory {
         "preferences-system-notifications"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Do Not Disturb", "Application notifications", "Notification sounds"]
+        &[
+            "Do Not Disturb",
+            "Application notifications",
+            "Notification sounds",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {

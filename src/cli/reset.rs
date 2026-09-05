@@ -3,8 +3,14 @@ use crate::settings::manager::SettingsManager;
 pub fn execute(manager: &mut SettingsManager, args: &[String]) -> Result<String, String> {
     match args.first().map(String::as_str) {
         None => Err("usage: mitos-settings reset <key> | --all".to_string()),
-        Some("--all") => manager.reset_all().map(|()| "Reset every setting to its default.".to_string()).map_err(|e| e.to_string()),
-        Some(key) => manager.reset(key).map(|()| format!("Reset {key} to its default.")).map_err(|e| e.to_string()),
+        Some("--all") => manager
+            .reset_all()
+            .map(|()| "Reset every setting to its default.".to_string())
+            .map_err(|e| e.to_string()),
+        Some(key) => manager
+            .reset(key)
+            .map(|()| format!("Reset {key} to its default."))
+            .map_err(|e| e.to_string()),
     }
 }
 

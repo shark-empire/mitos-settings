@@ -16,7 +16,14 @@ impl Category for AppearanceCategory {
         "preferences-desktop-appearance"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Colors", "Fonts", "Animations", "Icon theme", "Glass & panels", "Shell layout"]
+        &[
+            "Colors",
+            "Fonts",
+            "Animations",
+            "Icon theme",
+            "Glass & panels",
+            "Shell layout",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {

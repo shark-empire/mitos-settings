@@ -48,8 +48,12 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("settings.conf");
 
-        let mut doc = RawDocument { version: 2, entries: Default::default() };
-        doc.entries.insert("sound.volume".to_string(), "int:65".to_string());
+        let mut doc = RawDocument {
+            version: 2,
+            entries: Default::default(),
+        };
+        doc.entries
+            .insert("sound.volume".to_string(), "int:65".to_string());
         write(&path, &doc).unwrap();
 
         let reloaded = loader::load(&path).unwrap();

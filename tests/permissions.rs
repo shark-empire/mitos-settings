@@ -21,13 +21,25 @@ fn satisfies_matches_ordering() {
 
 #[test]
 fn auth_context_level_is_consistent_with_its_fields() {
-    let root = AuthContext { uid: 0, username: "root".into(), is_admin: true };
+    let root = AuthContext {
+        uid: 0,
+        username: "root".into(),
+        is_admin: true,
+    };
     assert_eq!(root.level(), PrivilegeLevel::Root);
 
-    let admin = AuthContext { uid: 1000, username: "amy".into(), is_admin: true };
+    let admin = AuthContext {
+        uid: 1000,
+        username: "amy".into(),
+        is_admin: true,
+    };
     assert_eq!(admin.level(), PrivilegeLevel::Admin);
 
-    let user = AuthContext { uid: 1000, username: "amy".into(), is_admin: false };
+    let user = AuthContext {
+        uid: 1000,
+        username: "amy".into(),
+        is_admin: false,
+    };
     assert_eq!(user.level(), PrivilegeLevel::User);
 }
 

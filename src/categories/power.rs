@@ -16,7 +16,13 @@ impl Category for PowerCategory {
         "preferences-system-power"
     }
     fn subitems(&self) -> &'static [&'static str] {
-        &["Battery", "Power profiles", "Screen timeout", "Suspend", "Lid behavior"]
+        &[
+            "Battery",
+            "Power profiles",
+            "Screen timeout",
+            "Suspend",
+            "Lid behavior",
+        ]
     }
 
     fn register(&self, schema: &mut Schema) {

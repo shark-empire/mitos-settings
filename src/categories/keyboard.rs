@@ -91,6 +91,9 @@ impl Category for KeyboardCategory {
     }
 
     fn live_info(&self) -> Vec<(&'static str, String)> {
-        crate::hardware::keyboard::list().into_iter().map(|d| ("device", d.name)).collect()
+        crate::hardware::keyboard::list()
+            .into_iter()
+            .map(|d| ("device", d.name))
+            .collect()
     }
 }

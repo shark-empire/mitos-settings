@@ -13,24 +13,38 @@ use std::process::Command;
 pub fn run_command(cmd: &str, args: &[&str]) -> io::Result<String> {
     let output = Command::new(cmd).args(args).output()?;
     if !output.status.success() {
-        return Err(io::Error::new(io::ErrorKind::Other, format!("{cmd} exited with {}", output.status)));
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("{cmd} exited with {}", output.status),
+        ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
 /// True if `bin` resolves on `$PATH`.
 pub fn command_exists(bin: &str) -> bool {
-    Command::new("which").arg(bin).output().map(|o| o.status.success()).unwrap_or(false)
+    Command::new("which")
+        .arg(bin)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 /// Parses `/etc/os-release` (`KEY=value`, values optionally quoted) into a
 /// map. Used by `categories::about` to show a friendly distro name.
 pub fn os_release() -> HashMap<String, String> {
     let mut map = HashMap::new();
-    let Ok(content) = fs::read_to_string("/etc/os-release") else { return map };
+    let Ok(content) = fs::read_to_string("/etc/os-release") else {
+        return map;
+    };
     for line in content.lines() {
-        let Some((key, value)) = line.split_once('=') else { continue };
-        map.insert(key.trim().to_string(), value.trim().trim_matches('"').to_string());
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        map.insert(
+            key.trim().to_string(),
+            value.trim().trim_matches('"').to_string(),
+        );
     }
     map
 }

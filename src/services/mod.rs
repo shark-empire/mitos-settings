@@ -28,9 +28,13 @@ use crate::settings::value::Value;
 /// installed in a minimal container.
 pub fn apply(key: &str, value: &Value) {
     let result: Option<std::io::Result<()>> = match key {
-        "display.brightness" => value.as_int().map(|v| display::set_brightness(v.clamp(0, 100) as u8)),
+        "display.brightness" => value
+            .as_int()
+            .map(|v| display::set_brightness(v.clamp(0, 100) as u8)),
         "display.night_light" => value.as_bool().map(display::set_night_light),
-        "sound.volume" => value.as_int().map(|v| audio::set_volume(v.clamp(0, 100) as u8)),
+        "sound.volume" => value
+            .as_int()
+            .map(|v| audio::set_volume(v.clamp(0, 100) as u8)),
         "sound.output_muted" => value.as_bool().map(audio::set_muted),
         "network.wifi_enabled" => value.as_bool().map(network::set_wifi_enabled),
         "bluetooth.enabled" => value.as_bool().map(bluetooth::set_powered),
