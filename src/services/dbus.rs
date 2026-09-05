@@ -72,17 +72,19 @@ fn call_dbus_send(method: &str) -> io::Result<String> {
 }
 
 /// Both `gdbus` and `dbus-send` print a human-readable rendering of the
-/// return tuple rather than a clean value (e.g. `('/home/amy/bg.png',)`),
-/// so this pulls the first quoted string out of whatever came back.
-/// Returns `None` if the reply doesn't contain one — an empty tuple `()`
-/// means the user cancelled the picker.
+/// return tuple rather than a clean value (e.g. `('/home/amy/bg.png',)` or
+/// `string "/home/amy/bg.png"`), so this pulls the first quoted string out of
+/// whatever came back. Returns `None` if the reply doesn't contain one — an
+/// empty tuple `()` means the user cancelled the picker.
 fn parse_file_picker_response(raw: &str) -> Option<String> {
-    let start = raw.find('"')?;
+    let quote = raw.chars().find(|&c| c == '\'' || c == '"')?;
+    let start = raw.find(quote)?;
     let rest = &raw[start + 1..];
-    let end = rest.find('"')?;
+    let end = rest.find(quote)?;
     let path = &rest[..end];
     (!path.is_empty()).then(|| path.to_string())
 }
+
 
 #[cfg(test)]
 mod tests {
