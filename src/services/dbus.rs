@@ -85,7 +85,6 @@ fn parse_file_picker_response(raw: &str) -> Option<String> {
     (!path.is_empty()).then(|| path.to_string())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
