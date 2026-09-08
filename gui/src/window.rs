@@ -7,7 +7,6 @@
 //! shows up automatically next time this is rebuilt.
 
 use crate::category_page;
-use crate::dialogs::chande_password;
 use gtk::prelude::*;
 use mitos_settings::categories;
 use mitos_settings::settings::manager::SettingsManager;
@@ -37,14 +36,4 @@ pub fn build(app: &gtk::Application, manager: Rc<RefCell<SettingsManager>>) {
     window.set_default_height(640);
     window.set_child(Some(&content));
     window.present();
-
-    // When building the user list, add a "Change Password" button
-    let change_password_btn = Button::builder().label("Change Password").build();
-
-    let username_owned = account.username.clone();
-    change_password_btn.connect_clicked(move |btn| {
-        if let Some(window) = btn.root().and_downcast::<gtk::Window>() {
-            crate::dialogs::change_password::show(&window, &username_owned);
-        }
-    });
 }
