@@ -35,6 +35,12 @@ pub enum Request {
     /// `SO_PEERCRED`. Mostly useful for confirming peer-credential
     /// resolution actually works end to end — see `ipc::permissions`.
     WhoAmI,
+
+        /// Change a user's password. Requires root privileges.
+    ChangePassword {
+        username: String,
+        new_password: String,
+    },
 }
 
 #[derive(Debug, Clone)]
