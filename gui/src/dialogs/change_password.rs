@@ -84,7 +84,6 @@ pub fn show(parent: &gtk::Window, username: &str) {
     dialog.present();
 }
 
-
 fn show_success_toast(message: &str) {
     // Use D-Bus notifications or your preferred toast system
     // This is a placeholder - implement based on your notification system
