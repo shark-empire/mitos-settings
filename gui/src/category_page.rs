@@ -63,7 +63,7 @@ fn build_account_row(username: &str, uid: u32) -> gtk::Widget {
     label.set_hexpand(true);
     row.append(&label);
 
-    let button = gtk::Button::builder().label("Change Password…").build();
+    let button = gtk::Button::builder().label("Set Password…").build();
     let username = username.to_string();
     button.connect_clicked(move |button| {
         // If your gtk4-rs version lacks `and_downcast`, use:
