@@ -5,7 +5,7 @@ use gtk::{Dialog, Entry, Label, ResponseType};
 
 pub fn show(parent: &gtk::Window, username: &str) {
     let dialog = Dialog::builder()
-        .title("Change Password")
+        .title("Set Password")
         .transient_for(parent)
         .modal(true)
         .build();
@@ -45,7 +45,7 @@ pub fn show(parent: &gtk::Window, username: &str) {
     content.append(&error_label);
 
     dialog.add_button("Cancel", ResponseType::Cancel);
-    dialog.add_button("Change", ResponseType::Accept);
+    dialog.add_button("Save", ResponseType::Accept);
     dialog.set_default_response(Some(ResponseType::Accept));
 
     let username = username.to_string();
