@@ -161,29 +161,68 @@ fn dispatch(
                 .collect();
             Response::Data(rows)
         }
+
+        Request::ChangePassword { username, new_password } => {
+            // Security check: Only allow changing own password or root changing any password.
+            // We use the `peer` AuthContext which was already authenticated via SO_PEERCRED.
+            if peer.username != username && peer.uid != 0 {
+                return Response::Err("Permission denied: can only change your own password".into());
+            }
+
+            // Basic password strength validation
+            if new_password.len() < 8 {
+                return Response::Err("Password must be at least 8 characters".into());
+            }
+
+            // Use the system's passwd utility to change the password.
+            // Because this daemon runs as root, `passwd` will NOT ask for the 
+            // old password, it will just prompt for the new one twice.
+            match change_password_via_passwd(&username, &new_password) {
+                Ok(()) => {
+                    eprintln!("mitos-settings daemon: password changed successfully for user {}", username);
+                    Response::Ok("password changed".into())
+                }
+                Err(e) => {
+                    eprintln!("mitos-settings daemon: failed to change password for {}: {}", username, e);
+                    Response::Err(format!("Failed to change password: {}", e))
+                }
+            }
+        }
     }
 }
 
-// Example of what the daemon would do:
-fn handle_set_password(username: &str, new_password: &str) -> Result<(), String> {
-    // Spawn the standard Linux passwd utility
-    let mut child = std::process::Command::new("passwd")
+/// Changes a user's password using the system's passwd utility.
+/// This is safer than writing directly to /etc/shadow because it
+/// respects PAM configuration, password quality policies, etc.
+fn change_password_via_passwd(username: &str, new_password: &str) -> Result<(), String> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    let mut child = Command::new("passwd")
         .arg(username)
-        .stdin(std::process::Stdio::piped())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn passwd: {}", e))?;
 
-    // Pass the password twice (passwd asks for it twice)
+    // passwd asks for the password twice (when run as root for a specific user)
     if let Some(mut stdin) = child.stdin.take() {
-        use std::io::Write;
-        writeln!(stdin, "{}", new_password).unwrap();
-        writeln!(stdin, "{}", new_password).unwrap();
+        writeln!(stdin, "{}", new_password).map_err(|e| e.to_string())?;
+        writeln!(stdin, "{}", new_password).map_err(|e| e.to_string())?;
     }
 
-    let status = child.wait().unwrap();
-    if status.success() {
+    let output = child.wait_with_output().map_err(|e| e.to_string())?;
+    
+    if output.status.success() {
         Ok(())
     } else {
-        Err("Password change failed".to_string())
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // passwd usually outputs errors to stderr or stdout, capturing both is safer
+        if stderr.is_empty() {
+            Err("passwd failed with unknown error".to_string())
+        } else {
+            Err(format!("passwd failed: {}", stderr.trim()))
+        }
     }
 }
