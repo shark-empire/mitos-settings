@@ -6,7 +6,7 @@ use std::time::Duration;
 
 pub struct IpcClient;
 
-// Helper to get the default socket path. 
+// Helper to get the default socket path.
 // IMPORTANT: Adjust this string if your daemon binds to a different location!
 fn default_socket_path() -> PathBuf {
     PathBuf::from("/run/mitos-settings/daemon.sock")
