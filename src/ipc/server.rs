@@ -163,3 +163,28 @@ fn dispatch(
         }
     }
 }
+
+// Example of what the daemon would do:
+fn handle_set_password(username: &str, new_password: &str) -> Result<(), String> {
+    // Spawn the standard Linux passwd utility
+    let mut child = std::process::Command::new("passwd")
+        .arg(username)
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn passwd: {}", e))?;
+
+    // Pass the password twice (passwd asks for it twice)
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        writeln!(stdin, "{}", new_password).unwrap();
+        writeln!(stdin, "{}", new_password).unwrap();
+    }
+
+    let status = child.wait().unwrap();
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Password change failed".to_string())
+    }
+}
+
