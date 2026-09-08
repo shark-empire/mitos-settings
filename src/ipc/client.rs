@@ -1,10 +1,16 @@
 use super::protocol::{Request, Response};
 use std::io::BufReader;
 use std::os::unix::net::UnixStream;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub struct IpcClient;
+
+// Helper to get the default socket path. 
+// IMPORTANT: Adjust this string if your daemon binds to a different location!
+fn default_socket_path() -> PathBuf {
+    PathBuf::from("/run/mitos-settings/daemon.sock")
+}
 
 impl IpcClient {
     /// Connects to `socket`, sends `request`, and waits for a response.
@@ -23,20 +29,17 @@ impl IpcClient {
     /// can display it (e.g. "Permission denied: can only change your own
     /// password").
     pub fn change_password(username: &str, new_password: &str) -> Result<(), String> {
-        let mut stream = connect()?; // your existing socket-connect helper
-        Request::ChangePassword {
+        let socket = default_socket_path();
+        let request = Request::ChangePassword {
             username: username.to_string(),
             new_password: new_password.to_string(),
-        }
-        .write_to(&stream)
-        .map_err(|e| format!("could not send request: {e}"))?;
+        };
 
-        match Response::read_from(std::io::BufReader::new(&stream))
-            .map_err(|e| format!("could not read response: {e}"))?
-        {
-            Response::Ok(_) => Ok(()),
-            Response::Err(e) => Err(e),
-            other => Err(format!("unexpected daemon response: {other:?}")),
+        match Self::send(&socket, &request) {
+            Ok(Response::Ok(_)) => Ok(()),
+            Ok(Response::Err(e)) => Err(e),
+            Ok(other) => Err(format!("unexpected daemon response: {other:?}")),
+            Err(e) => Err(format!("could not communicate with daemon: {e}")),
         }
     }
 }
