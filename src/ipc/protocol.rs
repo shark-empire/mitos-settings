@@ -65,6 +65,12 @@ impl Request {
             },
             Request::Ping => writeln!(w, "PING"),
             Request::WhoAmI => writeln!(w, "WHOAMI"),
+                    // ADD THIS:
+        Request::ChangePassword { username, new_password } => {
+            writeln!(w, "CHANGEPASSWORD")?;
+            writeln!(w, "{}", username)?;
+            writeln!(w, "{}", new_password)?;
+        }
         }
     }
 
@@ -100,6 +106,13 @@ impl Request {
             }
             "PING" => Ok(Request::Ping),
             "WHOAMI" => Ok(Request::WhoAmI),
+
+             // ADD THIS:
+        "CHANGEPASSWORD" => {
+            let username = r.read_line(&mut buf)?; // Use whatever helper you use to read a line
+            let new_password = r.read_line(&mut buf)?;
+            Ok(Request::ChangePassword { username, new_password })
+        }
             other => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("unknown verb '{other}'"),
