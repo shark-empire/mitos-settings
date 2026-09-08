@@ -13,7 +13,7 @@
 mod category_page;
 mod widgets;
 mod window;
-pub mod change_password;
+mod dialogs;
 
 use gtk::prelude::*;
 use mitos_settings::settings::manager::{Mode, SettingsManager};
