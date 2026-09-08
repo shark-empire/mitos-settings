@@ -36,7 +36,7 @@ pub enum Request {
     /// resolution actually works end to end — see `ipc::permissions`.
     WhoAmI,
 
-        /// Change a user's password. Requires root privileges.
+    /// Change a user's password. Requires root privileges.
     ChangePassword {
         username: String,
         new_password: String,
