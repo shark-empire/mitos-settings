@@ -110,17 +110,20 @@ impl Request {
             "PING" => Ok(Request::Ping),
             "WHOAMI" => Ok(Request::WhoAmI),
 
-        "CHANGEPASSWORD" => {
-            let mut username = String::new();
-            r.read_line(&mut username)?;
-            let username = username.trim_end().to_string();
+            "CHANGEPASSWORD" => {
+                let mut username = String::new();
+                r.read_line(&mut username)?;
+                let username = username.trim_end().to_string();
 
-            let mut new_password = String::new();
-            r.read_line(&mut new_password)?;
-            let new_password = new_password.trim_end().to_string();
+                let mut new_password = String::new();
+                r.read_line(&mut new_password)?;
+                let new_password = new_password.trim_end().to_string();
 
-            Ok(Request::ChangePassword { username, new_password })
-        }
+                Ok(Request::ChangePassword {
+                    username,
+                    new_password,
+                })
+            }
 
             other => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
