@@ -162,11 +162,16 @@ fn dispatch(
             Response::Data(rows)
         }
 
-        Request::ChangePassword { username, new_password } => {
+        Request::ChangePassword {
+            username,
+            new_password,
+        } => {
             // Security check: Only allow changing own password or root changing any password.
             // We use the `peer` AuthContext which was already authenticated via SO_PEERCRED.
             if peer.username != username && peer.uid != 0 {
-                return Response::Err("Permission denied: can only change your own password".into());
+                return Response::Err(
+                    "Permission denied: can only change your own password".into(),
+                );
             }
 
             // Basic password strength validation
@@ -175,15 +180,21 @@ fn dispatch(
             }
 
             // Use the system's passwd utility to change the password.
-            // Because this daemon runs as root, `passwd` will NOT ask for the 
+            // Because this daemon runs as root, `passwd` will NOT ask for the
             // old password, it will just prompt for the new one twice.
             match change_password_via_passwd(&username, &new_password) {
                 Ok(()) => {
-                    eprintln!("mitos-settings daemon: password changed successfully for user {}", username);
+                    eprintln!(
+                        "mitos-settings daemon: password changed successfully for user {}",
+                        username
+                    );
                     Response::Ok("password changed".into())
                 }
                 Err(e) => {
-                    eprintln!("mitos-settings daemon: failed to change password for {}: {}", username, e);
+                    eprintln!(
+                        "mitos-settings daemon: failed to change password for {}: {}",
+                        username, e
+                    );
                     Response::Err(format!("Failed to change password: {}", e))
                 }
             }
@@ -213,7 +224,7 @@ fn change_password_via_passwd(username: &str, new_password: &str) -> Result<(), 
     }
 
     let output = child.wait_with_output().map_err(|e| e.to_string())?;
-    
+
     if output.status.success() {
         Ok(())
     } else {

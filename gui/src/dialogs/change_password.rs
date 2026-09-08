@@ -29,7 +29,7 @@ pub fn show(parent: &gtk::Window, username: &str) {
     // New Password field
     let new_password = Entry::builder()
         .placeholder_text("New Password")
-        .visibility(false)  // Hide the password
+        .visibility(false) // Hide the password
         .build();
     content.append(&new_password);
 
@@ -41,10 +41,7 @@ pub fn show(parent: &gtk::Window, username: &str) {
     content.append(&confirm_password);
 
     // Error label (hidden by default)
-    let error_label = Label::builder()
-        .label("")
-        .visible(false)
-        .build();
+    let error_label = Label::builder().label("").visible(false).build();
     error_label.add_css_class("error");
     content.append(&error_label);
 

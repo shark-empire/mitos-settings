@@ -11,9 +11,9 @@
 //! clean.
 
 mod category_page;
+mod dialogs;
 mod widgets;
 mod window;
-mod dialogs;
 
 use gtk::prelude::*;
 use mitos_settings::settings::manager::{Mode, SettingsManager};
