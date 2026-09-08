@@ -187,4 +187,3 @@ fn handle_set_password(username: &str, new_password: &str) -> Result<(), String>
         Err("Password change failed".to_string())
     }
 }
-
