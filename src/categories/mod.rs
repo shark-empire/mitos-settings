@@ -1,9 +1,4 @@
-//! Each file in this module is one entry in the Settings navigator. A
-//! `Category` does two things: it registers its `SettingSpec`s into the
-//! `Schema` (so they're persistable and validated generically), and,
-//! optionally, exposes `live_info` for read-only data that's computed on
-//! the fly from `hardware`/`services` rather than stored (disk usage,
-//! paired Bluetooth devices, kernel version, ...).
+//! Each file in this module is one entry in the Settings navigator.
 
 use crate::settings::schema::{CategoryMeta, Schema};
 
@@ -16,6 +11,7 @@ pub mod bluetooth;
 pub mod date_time;
 pub mod developer;
 pub mod display;
+pub mod glass;
 pub mod keyboard;
 pub mod language;
 pub mod mouse;
@@ -35,7 +31,6 @@ pub mod updates;
 pub mod users;
 pub mod wallpaper;
 
-/// Something that shows up as a top-level entry in the Settings navigator.
 pub trait Category {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
@@ -43,20 +38,17 @@ pub trait Category {
     fn subitems(&self) -> &'static [&'static str];
     fn register(&self, schema: &mut Schema);
 
-    /// Live, read-only key/value pairs sourced straight from hardware or a
-    /// service. Most categories have none; About, Storage, Battery,
-    /// Printers, and Users override this.
     fn live_info(&self) -> Vec<(&'static str, String)> {
         Vec::new()
     }
 }
 
-/// Every category, in navigator order.
 pub fn all() -> Vec<Box<dyn Category>> {
     vec![
         Box::new(appearance::AppearanceCategory),
         Box::new(theme::ThemeCategory),
         Box::new(wallpaper::WallpaperCategory),
+        Box::new(glass::GlassCategory),
         Box::new(display::DisplayCategory),
         Box::new(sound::SoundCategory),
         Box::new(network::NetworkCategory),
@@ -85,14 +77,14 @@ pub fn all() -> Vec<Box<dyn Category>> {
 }
 
 pub fn register_all(schema: &mut Schema) {
-    for category in all() {
+    for cat in all() {
         schema.register_category(CategoryMeta {
-            id: category.id(),
-            name: category.name(),
-            icon: category.icon(),
-            subitems: category.subitems(),
+            id: cat.id(),
+            name: cat.name(),
+            icon: cat.icon(),
+            subitems: cat.subitems(),
         });
-        category.register(schema);
+        cat.register(schema);
     }
 }
 
