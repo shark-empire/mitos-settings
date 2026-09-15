@@ -24,5 +24,7 @@ mitos-settings = { path = ".." }
 # instead of gtk4::Widget), a common gtk4-rs convention.
 gtk = { package = "gtk4", version = "0.9" }
 
+rust-i18n = "3.0"
+
 [profile.release]
 opt-level = 2
