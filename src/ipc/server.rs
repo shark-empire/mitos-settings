@@ -1,5 +1,6 @@
 use super::permissions::{ensure_daemon_may_apply, peer_credentials};
 use super::protocol::{Request, Response};
+use crate::grants::service_client;
 use crate::permissions::{self, AuthContext};
 use crate::settings::manager::SettingsManager;
 use std::io::BufReader;
@@ -29,8 +30,14 @@ impl IpcServer {
         Ok(IpcServer { listener })
     }
 
-    /// Accepts connections forever, handling each on its own thread against
-    /// a shared, mutex-guarded `SettingsManager`.
+    /// Accepts connections forever, handling each on its own thread
+    /// against a shared, mutex-guarded `SettingsManager`. Permission
+    /// grants (`ListGrants`/`SetGrant`/`RevokeGrant`) don't touch this
+    /// mutex at all -- mitos-service holds that state now, not this
+    /// daemon (see the `grants` module doc comment), so a grant
+    /// change that's blocked for a while on a real mitos-session
+    /// elevation prompt never contends with settings reads/writes the
+    /// way an earlier, now-removed local grants store would have.
     pub fn run(self, manager: Arc<Mutex<SettingsManager>>) {
         for conn in self.listener.incoming() {
             match conn {
@@ -98,20 +105,26 @@ fn handle(stream: UnixStream, manager: &Arc<Mutex<SettingsManager>>) {
         }
     };
 
+    // `SetGrant` for a dangerous capability can sit here for as long
+    // as mitos-session's own prompt timeout allows (a couple of
+    // minutes by default) waiting on a human, relayed through
+    // mitos-service -- this thread blocking for that long is fine
+    // (every connection gets its own thread), but note that
+    // `write_to` below, and thus this whole function, won't return
+    // until then either.
     let response = dispatch(request, manager, &peer);
     let _ = response.write_to(&stream);
 }
 
-fn dispatch(
-    request: Request,
-    manager: &Arc<Mutex<SettingsManager>>,
-    peer: &AuthContext,
-) -> Response {
-    let mut manager = match manager.lock() {
-        Ok(g) => g,
-        Err(_) => return Response::Err("daemon state poisoned; restart the daemon".into()),
-    };
-
+/// Routes a request to whichever backend it actually needs:
+/// `Ping`/`WhoAmI`/`ChangePassword` need neither `manager` nor
+/// mitos-service, `ListGrants`/`SetGrant`/`RevokeGrant` talk only to
+/// mitos-service (via `grants::service_client`, no lock of this
+/// daemon's own held anywhere in that path), and everything else
+/// still locks `manager` inside `dispatch_settings`, unchanged from
+/// before grants existed. See `IpcServer::run`'s doc comment for why
+/// keeping grants off `manager`'s mutex matters.
+fn dispatch(request: Request, manager: &Arc<Mutex<SettingsManager>>, peer: &AuthContext) -> Response {
     match request {
         Request::Ping => Response::Ok("pong".into()),
 
@@ -122,6 +135,52 @@ fn dispatch(
             peer.level()
         )),
 
+        Request::ChangePassword {
+            username,
+            new_password,
+        } => dispatch_change_password(&username, &new_password, peer),
+
+        Request::ListGrants => match service_client::list() {
+            Ok(grants) => Response::Grants(grants),
+            Err(e) => Response::Err(e),
+        },
+
+        // `peer.uid` (never a value the request itself could supply)
+        // is who mitos-session ends up asking to verify, if
+        // `capability` turns out to be dangerous enough to need it --
+        // see `protocol::Request::SetGrant`'s doc comment for why
+        // that's the connecting peer specifically, always.
+        Request::SetGrant {
+            sha256,
+            capability,
+            decision,
+            scope,
+        } => match service_client::grant(&sha256, &capability, decision, scope, peer.uid) {
+            Ok(service_client::GrantResult::Granted) => Response::Ok("applied".into()),
+            Ok(service_client::GrantResult::Denied(reason)) => {
+                Response::Err(format!("not applied: {reason}"))
+            }
+            Err(e) => Response::Err(e),
+        },
+
+        Request::RevokeGrant { sha256, capability } => {
+            match service_client::revoke(&sha256, &capability) {
+                Ok(()) => Response::Ok("revoked".into()),
+                Err(e) => Response::Err(e),
+            }
+        }
+
+        settings_request => dispatch_settings(settings_request, manager, peer),
+    }
+}
+
+fn dispatch_settings(request: Request, manager: &Arc<Mutex<SettingsManager>>, peer: &AuthContext) -> Response {
+    let mut manager = match manager.lock() {
+        Ok(g) => g,
+        Err(_) => return Response::Err("daemon state poisoned; restart the daemon".into()),
+    };
+
+    match request {
         Request::Get { key } => match manager.get(&key) {
             Ok(v) => Response::Ok(v.encode()),
             Err(e) => Response::Err(e.to_string()),
@@ -162,42 +221,51 @@ fn dispatch(
             Response::Data(rows)
         }
 
-        Request::ChangePassword {
-            username,
-            new_password,
-        } => {
-            // Security check: Only allow changing own password or root changing any password.
-            // We use the `peer` AuthContext which was already authenticated via SO_PEERCRED.
-            if peer.username != username && peer.uid != 0 {
-                return Response::Err(
-                    "Permission denied: can only change your own password".into(),
-                );
-            }
+        // `dispatch` only ever forwards here after routing Ping/WhoAmI/
+        // ChangePassword/ListGrants/SetGrant/RevokeGrant to their own
+        // handling -- every remaining `Request` variant is a settings one.
+        Request::Ping
+        | Request::WhoAmI
+        | Request::ChangePassword { .. }
+        | Request::ListGrants
+        | Request::SetGrant { .. }
+        | Request::RevokeGrant { .. } => {
+            unreachable!("dispatch() routes these before ever calling dispatch_settings")
+        }
+    }
+}
 
-            // Basic password strength validation
-            if new_password.len() < 8 {
-                return Response::Err("Password must be at least 8 characters".into());
-            }
+fn dispatch_change_password(username: &str, new_password: &str, peer: &AuthContext) -> Response {
+    // Security check: Only allow changing own password or root changing any password.
+    // We use the `peer` AuthContext which was already authenticated via SO_PEERCRED.
+    if peer.username != username && peer.uid != 0 {
+        return Response::Err(
+            "Permission denied: can only change your own password".into(),
+        );
+    }
 
-            // Use the system's passwd utility to change the password.
-            // Because this daemon runs as root, `passwd` will NOT ask for the
-            // old password, it will just prompt for the new one twice.
-            match change_password_via_passwd(&username, &new_password) {
-                Ok(()) => {
-                    eprintln!(
-                        "mitos-settings daemon: password changed successfully for user {}",
-                        username
-                    );
-                    Response::Ok("password changed".into())
-                }
-                Err(e) => {
-                    eprintln!(
-                        "mitos-settings daemon: failed to change password for {}: {}",
-                        username, e
-                    );
-                    Response::Err(format!("Failed to change password: {}", e))
-                }
-            }
+    // Basic password strength validation
+    if new_password.len() < 8 {
+        return Response::Err("Password must be at least 8 characters".into());
+    }
+
+    // Use the system's passwd utility to change the password.
+    // Because this daemon runs as root, `passwd` will NOT ask for the
+    // old password, it will just prompt for the new one twice.
+    match change_password_via_passwd(username, new_password) {
+        Ok(()) => {
+            eprintln!(
+                "mitos-settings daemon: password changed successfully for user {}",
+                username
+            );
+            Response::Ok("password changed".into())
+        }
+        Err(e) => {
+            eprintln!(
+                "mitos-settings daemon: failed to change password for {}: {}",
+                username, e
+            );
+            Response::Err(format!("Failed to change password: {}", e))
         }
     }
 }

@@ -11,6 +11,7 @@
 //! followed by `DATA <key>=<value>` rows and a terminating `END` (used for
 //! `LIST`).
 
+use crate::grants::{Decision, Grant, Risk, Scope};
 use crate::settings::value::Value;
 use std::io::{self, BufRead, Write};
 
@@ -41,6 +42,35 @@ pub enum Request {
         username: String,
         new_password: String,
     },
+
+    /// List every grant currently held by mitos-service, the single
+    /// rulebook owner — see the `grants` module doc comment. Not
+    /// paginated or filtered; the rulebook isn't expected to be huge.
+    ListGrants,
+    /// Ask mitos-service to record a decision for `sha256`/
+    /// `capability`. No `uid` field here: the daemon supplies the
+    /// *connecting peer's own* uid (via `SO_PEERCRED`, the same
+    /// identity every other privileged write in this protocol is
+    /// authorized against) — a person can only ever grant something
+    /// against their own mitos-session session, never someone else's,
+    /// through this client. If mitos-service classifies
+    /// `capability` as `Dangerous`/`Critical`, the daemon's reply is
+    /// deferred until that person answers a real elevation prompt (or
+    /// declines it, or it times out) — see `grants::service_client::grant`.
+    SetGrant {
+        sha256: String,
+        capability: String,
+        decision: Decision,
+        scope: Scope,
+    },
+    /// Ask mitos-service to remove whatever decision exists for
+    /// `sha256`/`capability`, regardless of its scope. Revoking is
+    /// never dangerous the way granting is (see mitos-service's own
+    /// `ipc.rs`), so this never triggers elevation.
+    RevokeGrant {
+        sha256: String,
+        capability: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +78,18 @@ pub enum Response {
     Ok(String),
     Err(String),
     Data(Vec<(String, String)>),
+    /// Reply to `ListGrants` — kept as its own variant rather than
+    /// shoehorned into `Data`'s flat `key=value` rows, since a `Grant`
+    /// has more fields than that shape carries.
+    Grants(Vec<Grant>),
+}
+
+fn encode_risk(risk: Risk) -> &'static str {
+    risk.as_str()
+}
+
+fn decode_risk(s: &str) -> Option<Risk> {
+    Risk::parse(s)
 }
 
 impl Request {
@@ -73,6 +115,25 @@ impl Request {
                 writeln!(w, "CHANGEPASSWORD")?;
                 writeln!(w, "{}", username)?;
                 writeln!(w, "{}", new_password)
+            }
+
+            Request::ListGrants => writeln!(w, "LISTGRANTS"),
+            Request::SetGrant {
+                sha256,
+                capability,
+                decision,
+                scope,
+            } => {
+                writeln!(w, "SETGRANT")?;
+                writeln!(w, "{sha256}")?;
+                writeln!(w, "{capability}")?;
+                writeln!(w, "{}", decision.as_str())?;
+                writeln!(w, "{}", scope.as_str())
+            }
+            Request::RevokeGrant { sha256, capability } => {
+                writeln!(w, "REVOKEGRANT")?;
+                writeln!(w, "{sha256}")?;
+                writeln!(w, "{capability}")
             }
         }
     }
@@ -125,6 +186,53 @@ impl Request {
                 })
             }
 
+            "LISTGRANTS" => Ok(Request::ListGrants),
+            "SETGRANT" => {
+                let mut sha256 = String::new();
+                r.read_line(&mut sha256)?;
+                let sha256 = sha256.trim_end().to_string();
+
+                let mut capability = String::new();
+                r.read_line(&mut capability)?;
+                let capability = capability.trim_end().to_string();
+
+                let mut decision_line = String::new();
+                r.read_line(&mut decision_line)?;
+                let decision = Decision::parse(decision_line.trim_end()).ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("unknown decision '{}'", decision_line.trim_end()),
+                    )
+                })?;
+
+                let mut scope_line = String::new();
+                r.read_line(&mut scope_line)?;
+                let scope = Scope::parse(scope_line.trim_end()).ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("unknown scope '{}'", scope_line.trim_end()),
+                    )
+                })?;
+
+                Ok(Request::SetGrant {
+                    sha256,
+                    capability,
+                    decision,
+                    scope,
+                })
+            }
+            "REVOKEGRANT" => {
+                let mut sha256 = String::new();
+                r.read_line(&mut sha256)?;
+                let sha256 = sha256.trim_end().to_string();
+
+                let mut capability = String::new();
+                r.read_line(&mut capability)?;
+                let capability = capability.trim_end().to_string();
+
+                Ok(Request::RevokeGrant { sha256, capability })
+            }
+
             other => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("unknown verb '{other}'"),
@@ -142,6 +250,22 @@ impl Response {
                 writeln!(w, "OK")?;
                 for (k, v) in rows {
                     writeln!(w, "DATA {k}={v}")?;
+                }
+                writeln!(w, "END")
+            }
+            Response::Grants(rows) => {
+                writeln!(w, "GRANTS")?;
+                for row in rows {
+                    writeln!(
+                        w,
+                        "GRANT {}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}{}",
+                        row.sha256,
+                        row.capability,
+                        row.decision.as_str(),
+                        row.scope.as_str(),
+                        row.granted_at,
+                        encode_risk(row.risk),
+                    )?;
                 }
                 writeln!(w, "END")
             }
@@ -173,6 +297,39 @@ impl Response {
                 }
             }
             return Ok(Response::Data(rows));
+        }
+        if first == "GRANTS" {
+            let mut rows = Vec::new();
+            loop {
+                let mut line = String::new();
+                if r.read_line(&mut line)? == 0 || line.trim_end() == "END" {
+                    break;
+                }
+                let Some(rest) = line.trim_end().strip_prefix("GRANT ") else {
+                    continue; // skip anything malformed rather than aborting the whole list
+                };
+                let fields: Vec<&str> = rest.split('\u{1f}').collect();
+                if fields.len() != 6 {
+                    continue; // skip anything malformed rather than aborting the whole list
+                }
+                let (Some(decision), Some(scope), Ok(granted_at), Some(risk)) = (
+                    Decision::parse(fields[2]),
+                    Scope::parse(fields[3]),
+                    fields[4].parse::<u64>(),
+                    decode_risk(fields[5]),
+                ) else {
+                    continue;
+                };
+                rows.push(Grant {
+                    sha256: fields[0].to_string(),
+                    capability: fields[1].to_string(),
+                    decision,
+                    scope,
+                    granted_at,
+                    risk,
+                });
+            }
+            return Ok(Response::Grants(rows));
         }
         Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -206,6 +363,17 @@ mod tests {
             Request::Reset { key: None },
             Request::Ping,
             Request::WhoAmI,
+            Request::ListGrants,
+            Request::SetGrant {
+                sha256: "a".repeat(64),
+                capability: "raw_disk".into(),
+                decision: Decision::Allow,
+                scope: Scope::Always,
+            },
+            Request::RevokeGrant {
+                sha256: "b".repeat(64),
+                capability: "camera".into(),
+            },
         ];
         for req in requests {
             let mut buf = Vec::new();
@@ -237,5 +405,48 @@ mod tests {
             Response::Data(got) => assert_eq!(got, rows),
             other => panic!("expected Data, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn grants_response_round_trips() {
+        let rows = vec![
+            Grant {
+                sha256: "a".repeat(64),
+                capability: "raw_disk".into(),
+                decision: Decision::Allow,
+                scope: Scope::Always,
+                granted_at: 1_700_000_000,
+                risk: Risk::Critical,
+            },
+            Grant {
+                sha256: "b".repeat(64),
+                capability: "location".into(),
+                decision: Decision::Deny,
+                scope: Scope::Session,
+                granted_at: 1_700_000_001,
+                risk: Risk::Moderate,
+            },
+        ];
+        let mut buf = Vec::new();
+        Response::Grants(rows).write_to(&mut buf).unwrap();
+        let parsed = Response::read_from(Cursor::new(buf)).unwrap();
+        match parsed {
+            Response::Grants(got) => {
+                assert_eq!(got.len(), 2);
+                assert_eq!(got[0].capability, "raw_disk");
+                assert_eq!(got[0].decision, Decision::Allow);
+                assert_eq!(got[1].scope, Scope::Session);
+                assert_eq!(got[1].risk, Risk::Moderate);
+            }
+            other => panic!("expected Grants, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_empty_grants_list_round_trips_too() {
+        let mut buf = Vec::new();
+        Response::Grants(vec![]).write_to(&mut buf).unwrap();
+        let parsed = Response::read_from(Cursor::new(buf)).unwrap();
+        assert!(matches!(parsed, Response::Grants(rows) if rows.is_empty()));
     }
 }
