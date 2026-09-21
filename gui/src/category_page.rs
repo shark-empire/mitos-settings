@@ -42,6 +42,23 @@ pub fn build(
         }
     }
 
+    if category.id() == "privacy" {
+        // "Application permissions" -- see the `grants` module and
+        // `permissions_page`. A row per (app, capability) grant,
+        // appended after this category's own settings and live_info
+        // rather than replacing either of them, since Privacy has
+        // real settings of its own (e.g. `privacy.prompt_for_app_permissions`)
+        // that aren't part of this list.
+        let heading = gtk::Label::new(Some("Application permissions"));
+        heading.add_css_class("heading");
+        heading.set_halign(gtk::Align::Start);
+        heading.set_margin_top(18);
+        heading.set_margin_bottom(4);
+        heading.set_margin_start(12);
+        list.append(&heading);
+        list.append(&crate::permissions_page::build());
+    }
+
     let scrolled = gtk::ScrolledWindow::new();
     scrolled.set_child(Some(&list));
     scrolled.set_vexpand(true);

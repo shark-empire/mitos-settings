@@ -12,6 +12,7 @@
 
 mod category_page;
 mod dialogs;
+mod permissions_page;
 mod widgets;
 mod window;
 
