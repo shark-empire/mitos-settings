@@ -2,6 +2,7 @@
 //! (temp-file) `SettingsManager`, and talks to it with a real `IpcClient`
 //! — end to end, no mocks.
 
+use mitos_settings::grants::{Decision, Scope};
 use mitos_settings::ipc::{IpcClient, IpcServer, Request, Response};
 use mitos_settings::settings::manager::{Mode, SettingsManager};
 use mitos_settings::settings::persistence::Store;
@@ -199,6 +200,69 @@ fn user_level_setting_succeeds_regardless_of_peer_privilege() {
         matches!(response, Response::Ok(_)),
         "unexpected response: {response:?}"
     );
+
+    std::fs::remove_dir_all(socket.parent().unwrap()).ok();
+}
+
+// --- Permission grants ---
+//
+// mitos-settings holds no grant state of its own anymore -- every one
+// of these requests is a pass-through to mitos-service's control
+// socket (`grants::service_client`), which this sandbox doesn't run.
+// So unlike the settings tests above, none of these can exercise a
+// *successful* grant change end to end; what they can and do verify
+// is that mitos-settings' own socket still behaves correctly when its
+// dependency is missing -- a clean `Response::Err`, on every one of
+// `ListGrants`/`SetGrant`/`RevokeGrant`, never a hang or a dropped
+// connection -- which matters regardless of risk tier, since the
+// low/moderate-vs-dangerous distinction is now decided entirely on
+// mitos-service's side, not this daemon's.
+
+#[test]
+fn listing_grants_fails_cleanly_when_mitos_service_is_unreachable() {
+    let socket = temp_socket_path("grants-list-no-service");
+    spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
+
+    let response = IpcClient::send(&socket, &Request::ListGrants).unwrap();
+    assert!(matches!(response, Response::Err(_)), "expected an error, got {response:?}");
+
+    std::fs::remove_dir_all(socket.parent().unwrap()).ok();
+}
+
+#[test]
+fn setting_a_grant_fails_cleanly_when_mitos_service_is_unreachable() {
+    let socket = temp_socket_path("grants-set-no-service");
+    spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
+
+    let response = IpcClient::send(
+        &socket,
+        &Request::SetGrant {
+            sha256: "a".repeat(64),
+            capability: "camera".to_string(),
+            decision: Decision::Allow,
+            scope: Scope::Always,
+        },
+    )
+    .unwrap();
+    assert!(matches!(response, Response::Err(_)), "expected an error, got {response:?}");
+
+    std::fs::remove_dir_all(socket.parent().unwrap()).ok();
+}
+
+#[test]
+fn revoking_a_grant_fails_cleanly_when_mitos_service_is_unreachable() {
+    let socket = temp_socket_path("grants-revoke-no-service");
+    spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
+
+    let response = IpcClient::send(
+        &socket,
+        &Request::RevokeGrant {
+            sha256: "a".repeat(64),
+            capability: "camera".to_string(),
+        },
+    )
+    .unwrap();
+    assert!(matches!(response, Response::Err(_)), "expected an error, got {response:?}");
 
     std::fs::remove_dir_all(socket.parent().unwrap()).ok();
 }
