@@ -2,9 +2,12 @@
 
 A system settings manager and privileged daemon for MITOS. The core
 (this crate) is written in Rust with **zero external dependencies** —
-persistence, IPC, and CLI parsing are all hand-rolled on top of `std`. See
-`docs/architecture.md` for why, and where a real dependency would plug in
-if you're extending this for production.
+persistence, IPC, and CLI parsing are all hand-rolled on top of `std`,
+and that now includes talking to mitos-service (`grants/`), since its
+control-socket protocol is plain text, not a binary wire format
+needing a serialization crate. See `docs/architecture.md` for the full
+reasoning, and where a real dependency would plug in if you're
+extending this for production.
 
 There's also a graphical settings app (`gui/`, GTK4) for anyone who
 shouldn't have to touch a terminal — see [`gui/README.md`](gui/README.md).
@@ -63,6 +66,17 @@ Settings
   appearance/theme/wallpaper/shell-layout changes are projected out to
   `~/.config/mitos/home.conf`, which `mitos-gui` and `mitos-file-manager`
   watch via inotify — no IPC needed on their end. See `docs/home-conf.md`.
+- **Per-app permission grants** (`src/grants/`, "Application permissions"
+  in Settings → Privacy): which apps — identified by their binary's
+  SHA-256 hash, mitos-service tracks no name — may use which
+  capabilities (camera, root access, ...), each Allow/Deny with a
+  scope of Once/Session/Always. This daemon holds none of that state
+  itself: every read and write is a live call to mitos-service, the
+  single rulebook every MITOS component looks to, and changing a
+  capability mitos-service classifies as dangerous genuinely blocks on
+  a real mitos-session elevation prompt (relayed through
+  mitos-service) — not a local check. See the `grants` module's own
+  doc comment.
 - **Three front-ends over one core**: a CLI (`get`/`set`/`list`/`reset`/
   `pick-wallpaper`), an interactive text navigator, and the daemon's IPC
   server — all three are thin shells over the same `SettingsManager`.

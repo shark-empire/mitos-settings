@@ -19,6 +19,12 @@ members = ["gui"]
 # hand-rolled on top of std. See README.md for the rationale. If you later
 # want serde/clap/etc., the module boundaries (settings::persistence,
 # ipc::protocol, cli::mod) are exactly where you'd swap them in.
+#
+# grants::service_client talks to mitos-service's control socket, but that
+# protocol is plain newline-delimited text (see that project's ipc.rs) --
+# unlike mitos-session's bincode wire protocol, it needs no serialization
+# dependency at all, so this crate stays fully dependency-free even with
+# that integration in place.
 [dependencies]
 
 [lib]
