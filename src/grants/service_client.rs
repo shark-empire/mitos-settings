@@ -111,7 +111,11 @@ pub fn grant(
     uid: u32,
 ) -> Result<GrantResult, String> {
     let response = send(
-        &format!("GRANT {sha256} {capability} {} {} {uid}", decision.as_str(), scope.as_str()),
+        &format!(
+            "GRANT {sha256} {capability} {} {} {uid}",
+            decision.as_str(),
+            scope.as_str()
+        ),
         GRANT_TIMEOUT,
     )?;
     let line = response.trim();
