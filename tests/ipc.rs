@@ -224,7 +224,10 @@ fn listing_grants_fails_cleanly_when_mitos_service_is_unreachable() {
     spawn_test_daemon(socket.clone(), Mode::DaemonAuthority);
 
     let response = IpcClient::send(&socket, &Request::ListGrants).unwrap();
-    assert!(matches!(response, Response::Err(_)), "expected an error, got {response:?}");
+    assert!(
+        matches!(response, Response::Err(_)),
+        "expected an error, got {response:?}"
+    );
 
     std::fs::remove_dir_all(socket.parent().unwrap()).ok();
 }
@@ -244,7 +247,10 @@ fn setting_a_grant_fails_cleanly_when_mitos_service_is_unreachable() {
         },
     )
     .unwrap();
-    assert!(matches!(response, Response::Err(_)), "expected an error, got {response:?}");
+    assert!(
+        matches!(response, Response::Err(_)),
+        "expected an error, got {response:?}"
+    );
 
     std::fs::remove_dir_all(socket.parent().unwrap()).ok();
 }
@@ -262,7 +268,10 @@ fn revoking_a_grant_fails_cleanly_when_mitos_service_is_unreachable() {
         },
     )
     .unwrap();
-    assert!(matches!(response, Response::Err(_)), "expected an error, got {response:?}");
+    assert!(
+        matches!(response, Response::Err(_)),
+        "expected an error, got {response:?}"
+    );
 
     std::fs::remove_dir_all(socket.parent().unwrap()).ok();
 }
