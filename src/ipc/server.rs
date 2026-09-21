@@ -124,7 +124,11 @@ fn handle(stream: UnixStream, manager: &Arc<Mutex<SettingsManager>>) {
 /// still locks `manager` inside `dispatch_settings`, unchanged from
 /// before grants existed. See `IpcServer::run`'s doc comment for why
 /// keeping grants off `manager`'s mutex matters.
-fn dispatch(request: Request, manager: &Arc<Mutex<SettingsManager>>, peer: &AuthContext) -> Response {
+fn dispatch(
+    request: Request,
+    manager: &Arc<Mutex<SettingsManager>>,
+    peer: &AuthContext,
+) -> Response {
     match request {
         Request::Ping => Response::Ok("pong".into()),
 
@@ -174,7 +178,11 @@ fn dispatch(request: Request, manager: &Arc<Mutex<SettingsManager>>, peer: &Auth
     }
 }
 
-fn dispatch_settings(request: Request, manager: &Arc<Mutex<SettingsManager>>, peer: &AuthContext) -> Response {
+fn dispatch_settings(
+    request: Request,
+    manager: &Arc<Mutex<SettingsManager>>,
+    peer: &AuthContext,
+) -> Response {
     let mut manager = match manager.lock() {
         Ok(g) => g,
         Err(_) => return Response::Err("daemon state poisoned; restart the daemon".into()),
@@ -239,9 +247,7 @@ fn dispatch_change_password(username: &str, new_password: &str, peer: &AuthConte
     // Security check: Only allow changing own password or root changing any password.
     // We use the `peer` AuthContext which was already authenticated via SO_PEERCRED.
     if peer.username != username && peer.uid != 0 {
-        return Response::Err(
-            "Permission denied: can only change your own password".into(),
-        );
+        return Response::Err("Permission denied: can only change your own password".into());
     }
 
     // Basic password strength validation

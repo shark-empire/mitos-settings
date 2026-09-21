@@ -85,7 +85,12 @@ impl IpcClient {
     /// minutes is a worse outcome than a moment of extra plumbing. See
     /// `gui/src/permissions_page.rs` for the pattern this crate's own
     /// GUI uses.
-    pub fn set_grant(sha256: &str, capability: &str, decision: Decision, scope: Scope) -> Result<(), String> {
+    pub fn set_grant(
+        sha256: &str,
+        capability: &str,
+        decision: Decision,
+        scope: Scope,
+    ) -> Result<(), String> {
         let socket = default_socket_path();
         let request = Request::SetGrant {
             sha256: sha256.to_string(),
