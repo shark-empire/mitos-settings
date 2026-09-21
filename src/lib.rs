@@ -12,6 +12,7 @@ pub mod app;
 pub mod categories;
 pub mod cli;
 pub mod config;
+pub mod grants;
 pub mod hardware;
 pub mod ipc;
 pub mod notifications;
