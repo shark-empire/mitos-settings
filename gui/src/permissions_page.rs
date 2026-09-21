@@ -140,7 +140,11 @@ fn build_grant_row(grant: Grant, list_container: gtk::Box) -> gtk::Widget {
     text_box.set_hexpand(true);
     text_box.set_valign(gtk::Align::Center);
 
-    let title = gtk::Label::new(Some(&format!("{}  ·  {}", short_hash(&grant.sha256), grant.capability)));
+    let title = gtk::Label::new(Some(&format!(
+        "{}  ·  {}",
+        short_hash(&grant.sha256),
+        grant.capability
+    )));
     title.set_halign(gtk::Align::Start);
     title.add_css_class("monospace");
     text_box.append(&title);
@@ -248,7 +252,11 @@ fn build_grant_row(grant: Grant, list_container: gtk::Box) -> gtk::Widget {
         let deny_btn = deny_btn.clone();
         let set_busy = set_busy.clone();
         btn.connect_toggled(move |b| {
-            if suppress_signal.get() || !b.is_active() || busy.get() || decision == confirmed_decision.get() {
+            if suppress_signal.get()
+                || !b.is_active()
+                || busy.get()
+                || decision == confirmed_decision.get()
+            {
                 return;
             }
             error_label.set_visible(false);
@@ -306,7 +314,11 @@ fn build_grant_row(grant: Grant, list_container: gtk::Box) -> gtk::Widget {
         let always_btn = always_btn.clone();
         let set_busy = set_busy.clone();
         btn.connect_toggled(move |b| {
-            if suppress_signal.get() || !b.is_active() || busy.get() || scope == confirmed_scope.get() {
+            if suppress_signal.get()
+                || !b.is_active()
+                || busy.get()
+                || scope == confirmed_scope.get()
+            {
                 return;
             }
             error_label.set_visible(false);
@@ -534,7 +546,11 @@ fn build_add_grant_section(list_container: gtk::Box) -> gtk::Widget {
                 status_label.set_visible(true);
                 return;
             }
-            let decision = if allow_btn.is_active() { Decision::Allow } else { Decision::Deny };
+            let decision = if allow_btn.is_active() {
+                Decision::Allow
+            } else {
+                Decision::Deny
+            };
             let scope = if once_btn.is_active() {
                 Scope::Once
             } else if session_btn.is_active() {
@@ -557,7 +573,9 @@ fn build_add_grant_section(list_container: gtk::Box) -> gtk::Widget {
             let busy2 = Rc::clone(&busy);
             let list_container = list_container.clone();
             run_in_background(
-                move || mitos_settings::ipc::IpcClient::set_grant(&sha256, &capability, decision, scope),
+                move || {
+                    mitos_settings::ipc::IpcClient::set_grant(&sha256, &capability, decision, scope)
+                },
                 move |result| {
                     busy2.set(false);
                     submit_btn3.set_sensitive(true);
