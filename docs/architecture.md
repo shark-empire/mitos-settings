@@ -79,14 +79,68 @@ against it:
 See `docs/security.md` for what the daemon's socket permissions do and
 don't guarantee.
 
-## Why no external crates
+## Permission grants
 
-The whole crate builds against `std` alone — no serde, no clap, no tokio.
-For a project this shape (a settings store, a tiny IPC protocol, a CLI)
-that's a genuine design choice, not just a demo constraint: it keeps the
-dependency tree at zero, which matters for something that runs as root as
-part of the base OS. If you're extending this for a real product, the
-seams where a dependency would plug in cleanly are:
+Separate from the `settings::manager` stack described above: `grants/`
+is per-app permission grants (camera, microphone, root access, ...),
+matching the original MITOS permission design's description of this
+project's job: "see every app, see its permissions, and flip toggles."
+It's deliberately *not* built on `SettingSpec`/`Schema` — those assume
+a fixed, compile-time-known set of keys, and which apps exist (and
+what they ask for) is dynamic.
+
+**This module holds no state of its own.** An earlier version of this
+feature kept its own local rulebook (a file this daemon wrote and
+read, with its own guessed risk-classification table), built before
+mitos-service existed as a reachable project. Once it did, that local
+copy was removed entirely — mitos-service is the single rulebook every
+MITOS component looks to (see that project's own README), and
+`grants/` is now just enough to talk to it (`service_client`) and hold
+the shape of what it says back (`model`). If mitos-service is
+unreachable, permission grants simply don't work right now — a clear
+error surfaced up through `ipc::server` and the GUI, not a silent
+local fallback that could quietly drift from the real rulebook.
+
+Two things worth knowing about how a `SetGrant`/`ListGrants`/
+`RevokeGrant` request actually flows through `ipc::server`:
+
+- **None of them touch `SettingsManager`'s mutex.** `IpcServer::run`
+  only holds `Arc<Mutex<SettingsManager>>` — grants requests never
+  lock it at all (`ipc::server::dispatch` routes them to
+  `grants::service_client` directly, before ever reaching
+  `dispatch_settings`). This matters because a dangerous `SetGrant` can
+  legitimately block for up to a couple of minutes waiting on a real
+  mitos-session elevation prompt (relayed through mitos-service); if
+  that wait held the same lock ordinary settings reads/writes use, one
+  pending permission prompt would freeze brightness/volume/every other
+  setting on the machine for as long as it took someone to type a
+  password elsewhere.
+- **The uid mitos-session ends up asking to verify is always the
+  connecting peer's own** (`SO_PEERCRED`, the same identity every
+  other privileged write in this protocol is authorized against) —
+  never a value the request itself supplies. See
+  `protocol::Request::SetGrant`'s doc comment.
+
+`grants::service_client` is a real client of mitos-service's real
+control socket, speaking its actual plain-text protocol (see that
+project's `ipc.rs`) — no serialization dependency needed for it,
+unlike the equivalent piece of mitos-gui or mitos-session's own
+protocol, which is why this crate stays fully dependency-free even
+with mitos-service wired in (see "Dependencies" below).
+
+## Dependencies
+
+The core crate builds against `std` alone for everything it does — no
+clap, no tokio, no serde, and (as of the mitos-service integration
+above) still nothing beyond that: mitos-service's control-socket
+protocol is plain newline-delimited text on both ends, so talking to
+it needed no serialization dependency the way talking to
+mitos-session's bincode wire protocol would have. That's a genuine
+design choice for something that runs as root as part of the base OS,
+not just a demo constraint.
+
+If you're extending this for a real product, the seams where a
+dependency would plug in cleanly are:
 
 - `settings::value` / `settings::persistence` → serde + a real format
 - `cli::mod` → clap or a similar arg parser

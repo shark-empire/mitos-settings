@@ -82,6 +82,56 @@ the one place this project uses raw FFI, and only for that one syscall.
 A caller is `Admin` if they're uid 0, or a member of
 `sudo`/`wheel`/`admin`/`mitos-admin`.
 
+## Permission grants
+
+Worth calling out on its own because it crosses into two *other*
+projects' trust models, not just this one's: this daemon no longer
+talks to mitos-session at all for grants (an earlier version did — see
+git history if curious); it talks only to mitos-service, and
+mitos-service is the one that talks to mitos-session.
+
+**What this daemon can and can't do.** `grants::service_client` sends
+`GRANT <sha256> <capability> <allow|deny> <scope> <uid>` to
+mitos-service's control socket, with `<uid>` always the *connecting
+peer's own* (`SO_PEERCRED`-resolved, same as every other privileged
+write here) — never a value the request itself supplies, so a person
+can only ever grant something against their own mitos-session session
+through this client, never someone else's. What happens after that is
+entirely mitos-service's decision and mitos-session's verification;
+this daemon has no way to skip, weaken, or observe that check — it
+just relays mitos-service's eventual answer (`granted` / `denied: ...`
+/ `error: ...`) back to whoever asked.
+
+**What "granted" does and doesn't establish.** A successful `GRANT`
+for a `dangerous`/`critical` capability means the person at the
+keyboard typed their account's real password, verified by
+mitos-session over real PAM. It says nothing about whether flipping
+*this particular* grant was wise — that judgment call (is `root_shell`
+actually appropriate for this app?) is left entirely to whoever's
+looking at the toggle, the same way typing your password for `sudo`
+doesn't mean the command you're about to run is a good idea.
+
+**Current simplification, inherited from mitos-service rather than
+introduced here: grants are system-wide, not per-user.**
+mitos-service's rulebook keys each grant by `(sha256, capability)`
+alone, with no uid anywhere in the record — every account on the
+machine shares one grant per app. For MITOS's apparent
+single-primary-user desktop focus this is a reasonable starting point,
+but it's a real gap on a genuinely multi-user machine (user A denying
+an app's camera access would also deny it for user B). Not something
+this project can fix unilaterally — it would need mitos-service's own
+rulebook to grow a uid dimension.
+
+**What identifies an app: a binary hash, not a name — and this daemon
+trusts whatever hash a caller supplies.** Neither this daemon nor
+mitos-service independently verifies that a `sha256` actually
+corresponds to the app the person granting it thinks they're granting
+it for; see mitos-service's own `SECURITY.md` for the same limitation
+stated on that side. `grants::service_client::compute_sha256` (used by
+this daemon's own GUI) at least computes the hash from a real file
+rather than trusting a pasted string blindly, but a person can still
+paste an arbitrary hash they got from anywhere.
+
 ## What's deliberately *not* implemented
 
 - **Applying system updates.** `services::updates::check_pending` is
@@ -94,14 +144,23 @@ A caller is `Admin` if they're uid 0, or a member of
   rework once that exists, not just a new enum variant.)
 - **Account creation/deletion.** `services::accounts::list` is read-only.
   Creating or removing accounts is out of scope for a settings applet.
-- **Escalation UI.** `permissions::privileged::run_as_root` will try
-  `pkexec` then non-interactive `sudo`, but this project ships no
-  graphical polkit agent — that's a session/desktop-environment concern,
-  not a settings-daemon concern. MITOS's own init/session story isn't
-  decided yet either.
+- **Escalation UI for settings other than grants.** `permissions::privileged::run_as_root`
+  will try `pkexec` then non-interactive `sudo` for an ordinary
+  `Admin`/`Root`-level setting, but this project ships no graphical
+  polkit agent for that path — a session/desktop-environment concern
+  this settings daemon doesn't take on generally. Permission grants
+  specifically are the one place a real password prompt exists today
+  (via mitos-session, see above) precisely because that flow was
+  already built and mitos-session already runs the real thing; it
+  hasn't been generalized to cover every other privileged setting in
+  this project.
 - **Auditing who changed what.** `SO_PEERCRED` resolution means the
   daemon *could* log "uid 1000 (amy) changed network.proxy_mode" today,
-  but nothing currently writes such a log anywhere durable.
+  but nothing currently writes such a log anywhere durable for ordinary
+  settings. Grant changes are a partial exception: mitos-session logs
+  every elevation request/response it handles on this daemon's behalf
+  (see that project's `logging::audit_log`), but a grant change that
+  *didn't* need elevating leaves no record at all on either side.
 
 ## Reporting a real vulnerability
 
