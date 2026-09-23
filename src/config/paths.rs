@@ -19,6 +19,12 @@ pub fn user_config_path() -> PathBuf {
     user_config_dir().join("settings.conf")
 }
 
+/// A bounded, append-only log of user-scope setting changes -- see
+/// `settings::history`.
+pub fn user_history_path() -> PathBuf {
+    user_config_dir().join("history.log")
+}
+
 /// System-wide store, only writable by root / the daemon.
 pub fn system_config_dir() -> PathBuf {
     PathBuf::from("/etc/mitos-settings")
@@ -26,6 +32,13 @@ pub fn system_config_dir() -> PathBuf {
 
 pub fn system_config_path() -> PathBuf {
     system_config_dir().join("settings.conf")
+}
+
+/// The system-scope counterpart to `user_history_path` -- only the
+/// daemon (root) ever writes here, matching `system_config_path`'s same
+/// access pattern.
+pub fn system_history_path() -> PathBuf {
+    system_config_dir().join("history.log")
 }
 
 pub fn runtime_dir() -> PathBuf {
