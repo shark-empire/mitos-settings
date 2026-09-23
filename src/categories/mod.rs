@@ -27,6 +27,7 @@ pub mod sound;
 pub mod storage;
 pub mod theme;
 pub mod touchpad;
+pub mod touchscreen;
 pub mod updates;
 pub mod users;
 pub mod wallpaper;
@@ -56,6 +57,7 @@ pub fn all() -> Vec<Box<dyn Category>> {
         Box::new(keyboard::KeyboardCategory),
         Box::new(mouse::MouseCategory),
         Box::new(touchpad::TouchpadCategory),
+        Box::new(touchscreen::TouchscreenCategory),
         Box::new(power::PowerCategory),
         Box::new(battery::BatteryCategory),
         Box::new(users::UsersCategory),

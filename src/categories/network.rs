@@ -73,15 +73,18 @@ impl Category for NetworkCategory {
             PrivilegeLevel::Admin,
         ));
 
-        schema.register(SettingSpec::new(
-            "network.firewall_enabled",
-            "network",
-            "Firewall",
-            "Block unsolicited incoming connections",
-            ValueKind::Bool,
-            Value::Bool(true),
-            PrivilegeLevel::Admin,
-        ));
+        schema.register(
+            SettingSpec::new(
+                "network.firewall_enabled",
+                "network",
+                "Firewall",
+                "Block unsolicited incoming connections",
+                ValueKind::Bool,
+                Value::Bool(true),
+                PrivilegeLevel::Admin,
+            )
+            .dangerous(),
+        );
     }
 
     fn live_info(&self) -> Vec<(&'static str, String)> {

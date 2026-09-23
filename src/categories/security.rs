@@ -67,15 +67,18 @@ impl Category for SecurityCategory {
             .read_only(),
         );
 
-        schema.register(SettingSpec::new(
-            "security.require_password_immediately",
-            "security",
-            "Require password immediately",
-            "No grace period before the lock screen demands a password",
-            ValueKind::Bool,
-            Value::Bool(true),
-            PrivilegeLevel::Admin,
-        ));
+        schema.register(
+            SettingSpec::new(
+                "security.require_password_immediately",
+                "security",
+                "Require password immediately",
+                "No grace period before the lock screen demands a password",
+                ValueKind::Bool,
+                Value::Bool(true),
+                PrivilegeLevel::Admin,
+            )
+            .dangerous(),
+        );
 
         schema.register(SettingSpec::new(
             "security.automatic_security_updates",

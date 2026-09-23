@@ -20,15 +20,18 @@ impl Category for LanguageCategory {
     }
 
     fn register(&self, schema: &mut Schema) {
-        schema.register(SettingSpec::new(
-            "language.system_language",
-            "language",
-            "Language",
-            "System-wide display language, as a POSIX locale (e.g. en_US.UTF-8)",
-            ValueKind::Str,
-            Value::Str("en_US.UTF-8".into()),
-            PrivilegeLevel::Admin,
-        ));
+        schema.register(
+            SettingSpec::new(
+                "language.system_language",
+                "language",
+                "Language",
+                "System-wide display language, as a POSIX locale (e.g. en_US.UTF-8)",
+                ValueKind::Str,
+                Value::Str("en_US.UTF-8".into()),
+                PrivilegeLevel::Admin,
+            )
+            .requires_restart(),
+        );
 
         schema.register(SettingSpec::new(
             "language.keyboard_layouts",

@@ -20,15 +20,18 @@ impl Category for DeveloperCategory {
     }
 
     fn register(&self, schema: &mut Schema) {
-        schema.register(SettingSpec::new(
-            "developer.mode_enabled",
-            "developer",
-            "Developer mode",
-            "Unlock developer-only features (local root shell, unsigned packages, ...)",
-            ValueKind::Bool,
-            Value::Bool(false),
-            PrivilegeLevel::Admin,
-        ));
+        schema.register(
+            SettingSpec::new(
+                "developer.mode_enabled",
+                "developer",
+                "Developer mode",
+                "Unlock developer-only features (local root shell, unsigned packages, ...)",
+                ValueKind::Bool,
+                Value::Bool(false),
+                PrivilegeLevel::Admin,
+            )
+            .dangerous(),
+        );
 
         schema.register(SettingSpec::new(
             "developer.diagnostics_enabled",

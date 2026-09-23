@@ -30,15 +30,18 @@ impl Category for UsersCategory {
             PrivilegeLevel::User,
         ));
 
-        schema.register(SettingSpec::new(
-            "users.auto_login",
-            "users",
-            "Automatic login",
-            "Sign in automatically without a password at boot",
-            ValueKind::Bool,
-            Value::Bool(false),
-            PrivilegeLevel::Admin,
-        ));
+        schema.register(
+            SettingSpec::new(
+                "users.auto_login",
+                "users",
+                "Automatic login",
+                "Sign in automatically without a password at boot",
+                ValueKind::Bool,
+                Value::Bool(false),
+                PrivilegeLevel::Admin,
+            )
+            .dangerous(),
+        );
 
         schema.register(SettingSpec::new(
             "users.guest_account_enabled",
