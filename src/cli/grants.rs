@@ -67,8 +67,8 @@ fn set(args: &[String]) -> Result<String, String> {
                 .to_string(),
         );
     };
-    let decision = Decision::parse(decision)
-        .ok_or_else(|| format!("'{decision}' is not 'allow' or 'deny'"))?;
+    let decision =
+        Decision::parse(decision).ok_or_else(|| format!("'{decision}' is not 'allow' or 'deny'"))?;
     let scope = Scope::parse(scope)
         .ok_or_else(|| format!("'{scope}' is not 'once', 'session', or 'always'"))?;
 

@@ -9,6 +9,8 @@
 
 pub mod get;
 pub mod grants;
+pub mod history;
+pub mod import;
 pub mod list;
 pub mod pick_wallpaper;
 pub mod reset;
@@ -26,6 +28,9 @@ Commands:
   list [category] [--json]  List categories/settings; --json for machine-readable output
   reset <key> | --all    Restore a setting (or everything) to its default
   schema                  Dump the full schema (types, defaults, constraints) as JSON
+  history [count]         Show recent setting changes (default: last 20)
+  import <file.json>      Apply a `list --json`-shaped file; validates every
+                          value before writing any of them
   grants <subcommand>     List/set/revoke mitos-service permission grants -- run
                           `mitos-settings grants` with no subcommand for details
   pick-wallpaper          Open the MITOS file picker and set the wallpaper
@@ -71,6 +76,8 @@ pub fn run(args: &[String]) -> i32 {
         "list" => list::execute(&manager, rest),
         "reset" => reset::execute(&mut manager, rest),
         "schema" => schema::execute(&manager),
+        "history" => history::execute(&manager, rest),
+        "import" => import::execute(&mut manager, rest),
         "pick-wallpaper" => pick_wallpaper::execute(&mut manager),
         other => Err(format!("unknown command '{other}'\n\n{USAGE}")),
     };
