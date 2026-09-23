@@ -24,7 +24,10 @@ pub fn execute(manager: &SettingsManager, args: &[String]) -> Result<String, Str
     }
 
     let mut out = String::new();
-    out.push_str(&format!("{:<12} {:<32} {}\n", "WHEN (unix)", "KEY", "VALUE"));
+    out.push_str(&format!(
+        "{:<12} {:<32} {}\n",
+        "WHEN (unix)", "KEY", "VALUE"
+    ));
     for entry in entries {
         out.push_str(&format!(
             "{:<12} {:<32} {}\n",
