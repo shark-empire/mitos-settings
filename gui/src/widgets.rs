@@ -5,26 +5,39 @@
 //! privilege escalation (forwarding to the daemon over IPC when this
 //! process isn't privileged enough) all come for free from the core crate.
 //!
+//! Two pieces of `SettingSpec` metadata get their own treatment here:
+//! `requires_restart` just adds a badge next to the label -- `set` still
+//! applies and persists immediately either way. `dangerous` changes
+//! *behavior*, but only for `build_switch` so far (the only control type
+//! any `dangerous` setting currently uses): toggling stages the change
+//! instead of writing it, and a separate "Apply" button commits it, so a
+//! stray tap can't silently flip something like the firewall or automatic
+//! login. The other four control types don't have a `dangerous` path yet
+//! -- extend them the same way if a future dangerous setting needs one.
+//!
 //! **API-risk note:** every GTK call here was written from memory of
 //! well-established gtk4-rs patterns, without a compiler to check against
 //! (see this crate's README.md). If something doesn't compile, the signal
 //! names and getter methods (`connect_active_notify`, `is_active`,
-//! `connect_selected_notify`, `DropDown::from_strings`) are the most likely
-//! spots to need a small adjustment for whatever gtk4-rs version actually
-//! resolves — the overall structure (one function per `ValueKind`, notify
-//! signals over signals-with-return-values) should hold regardless.
+//! `connect_selected_notify`, `DropDown::from_strings`,
+//! `insert_child_after`) are the most likely spots to need a small
+//! adjustment for whatever gtk4-rs version actually resolves — the overall
+//! structure (one function per `ValueKind`, notify signals over
+//! signals-with-return-values) should hold regardless.
 
 use gtk::prelude::*;
 use mitos_settings::permissions::PrivilegeLevel;
 use mitos_settings::settings::manager::{SettingsError, SettingsManager};
-use mitos_settings::settings::schema::{SettingSpec, ValueKind};
-use mitos_settings::settings::value::Value;
+use mitos_settings::settings::schema::SettingSpec;
+use mitos_settings::settings::value::{Value, ValueKind};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-/// One row: label (+ description as a tooltip) on the left, the
-/// value-appropriate control on the right. Read-only settings get a plain
-/// dimmed label instead of an editable control.
+/// One row: label (+ description as a tooltip, + a "restart required"
+/// badge if the spec calls for one) on the left, the value-appropriate
+/// control and a reset-to-default button on the right. Read-only settings
+/// get a plain dimmed label and no reset button, since there's nothing to
+/// reset.
 pub fn build_setting_row(
     spec: &SettingSpec,
     manager: &Rc<RefCell<SettingsManager>>,
@@ -42,14 +55,50 @@ pub fn build_setting_row(
     label.set_tooltip_text(Some(spec.description));
     row.append(&label);
 
+    if spec.requires_restart {
+        row.append(&restart_badge());
+    }
+
     if spec.read_only {
         let value_text = current_value_text(spec, manager);
         let value_label = gtk::Label::new(Some(value_text.as_str()));
         value_label.add_css_class("dim-label");
         row.append(&value_label);
-    } else {
-        row.append(&build_control(spec, manager));
+        return row.upcast::<gtk::Widget>();
     }
+
+    let control = build_control(spec, manager);
+    row.append(&control);
+    let current_control = Rc::new(RefCell::new(control));
+
+    let reset_btn = gtk::Button::new();
+    reset_btn.set_label("Reset");
+    reset_btn.add_css_class("flat");
+    reset_btn.set_tooltip_text(Some("Restore the default value"));
+    {
+        let key = spec.key;
+        let manager = Rc::clone(manager);
+        let row_for_reset = row.clone();
+        let current_control = Rc::clone(&current_control);
+        let spec_owned = spec.clone();
+        reset_btn.connect_clicked(move |btn| {
+            let result = manager.borrow_mut().reset(key);
+            if result.is_ok() {
+                // Rebuild the control from scratch rather than mutating the
+                // live widget in place -- `build_control` already knows how
+                // to read the (now-reset) value back out for every
+                // `ValueKind`, so this avoids a second per-type switch here
+                // just to push the default into whatever's currently shown.
+                let fresh = build_control(&spec_owned, &manager);
+                let old = current_control.borrow().clone();
+                row_for_reset.insert_child_after(&fresh, Some(&old));
+                row_for_reset.remove(&old);
+                *current_control.borrow_mut() = fresh;
+            }
+            report_result(btn.upcast_ref::<gtk::Widget>(), result);
+        });
+    }
+    row.append(&reset_btn);
 
     row.upcast::<gtk::Widget>()
 }
@@ -78,6 +127,14 @@ fn row_box() -> gtk::Box {
     row.set_margin_start(12);
     row.set_margin_end(12);
     row
+}
+
+fn restart_badge() -> gtk::Widget {
+    let badge = gtk::Label::new(Some("restart"));
+    badge.add_css_class("caption");
+    badge.add_css_class("dim-label");
+    badge.set_tooltip_text(Some("Takes effect after a restart"));
+    badge.upcast::<gtk::Widget>()
 }
 
 fn current_value_text(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> String {
@@ -110,16 +167,54 @@ fn build_switch(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> g
     switch.set_active(current);
     switch.set_valign(gtk::Align::Center);
 
-    let key = spec.key;
-    let manager = Rc::clone(manager);
-    switch.connect_active_notify(move |switch| {
-        let result = manager
-            .borrow_mut()
-            .set(key, Value::Bool(switch.is_active()));
-        report_result(switch.upcast_ref::<gtk::Widget>(), result);
-    });
+    if !spec.dangerous {
+        let key = spec.key;
+        let manager = Rc::clone(manager);
+        switch.connect_active_notify(move |switch| {
+            let result = manager
+                .borrow_mut()
+                .set(key, Value::Bool(switch.is_active()));
+            report_result(switch.upcast_ref::<gtk::Widget>(), result);
+        });
+        return switch.upcast::<gtk::Widget>();
+    }
 
-    switch.upcast::<gtk::Widget>()
+    // Dangerous: flipping the switch only stages the change -- nothing is
+    // written until "Apply" is clicked, so a single stray tap can't
+    // silently turn off the firewall or turn on automatic login. No
+    // separate "cancel" is needed: toggling back before clicking Apply
+    // just stages the original value again, and navigating away without
+    // clicking Apply leaves the setting untouched either way.
+    let wrapper = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    wrapper.set_valign(gtk::Align::Center);
+    wrapper.append(&switch);
+
+    let apply_btn = gtk::Button::new();
+    apply_btn.set_label("Apply");
+    apply_btn.set_sensitive(false);
+    apply_btn.set_tooltip_text(Some("Dangerous settings need a separate confirmation"));
+    wrapper.append(&apply_btn);
+
+    {
+        let apply_btn = apply_btn.clone();
+        switch.connect_active_notify(move |_switch| {
+            apply_btn.set_sensitive(true);
+        });
+    }
+    {
+        let key = spec.key;
+        let manager = Rc::clone(manager);
+        let switch_for_apply = switch.clone();
+        apply_btn.connect_clicked(move |btn| {
+            let result = manager
+                .borrow_mut()
+                .set(key, Value::Bool(switch_for_apply.is_active()));
+            report_result(switch_for_apply.upcast_ref::<gtk::Widget>(), result);
+            btn.set_sensitive(false);
+        });
+    }
+
+    wrapper.upcast::<gtk::Widget>()
 }
 
 fn build_dropdown(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
