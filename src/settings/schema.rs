@@ -29,6 +29,18 @@ pub struct SettingSpec {
     /// `hardware`/`services` rather than stored — and `SettingsManager::set`
     /// rejects writes to them.
     pub read_only: bool,
+    /// Doesn't take effect until whatever owns it restarts (a compositor,
+    /// a shell, the session). Purely informational -- `SettingsManager::set`
+    /// still applies and persists the write immediately, same as any other
+    /// setting; this just tells a UI to say so.
+    pub requires_restart: bool,
+    /// Worth a confirmation before applying -- the kind of setting where a
+    /// wrong tap has real consequences (locks you out, opens up the
+    /// machine). Distinct from `privilege`: privilege gates *who* can
+    /// change it, this gates *how casually*. Purely advisory at the schema
+    /// level, same as `requires_restart` -- `SettingsManager::set` doesn't
+    /// enforce it, a UI does.
+    pub dangerous: bool,
 }
 
 impl SettingSpec {
@@ -53,6 +65,8 @@ impl SettingSpec {
             range: None,
             format: None,
             read_only: false,
+            requires_restart: false,
+            dangerous: false,
         }
     }
 
@@ -73,6 +87,16 @@ impl SettingSpec {
 
     pub fn read_only(mut self) -> Self {
         self.read_only = true;
+        self
+    }
+
+    pub fn requires_restart(mut self) -> Self {
+        self.requires_restart = true;
+        self
+    }
+
+    pub fn dangerous(mut self) -> Self {
+        self.dangerous = true;
         self
     }
 }

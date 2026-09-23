@@ -17,6 +17,7 @@ use crate::notifications::events::{Event, EventBus};
 use crate::permissions::{self, AuthContext, PrivilegeLevel};
 use crate::services;
 use crate::settings::defaults;
+use crate::settings::history;
 use crate::settings::persistence::Store;
 use crate::settings::schema::{Schema, SettingSpec};
 use crate::settings::validation::{self, ValidationError};
@@ -91,6 +92,12 @@ pub struct SettingsManager {
     /// but a "real" `load()`-backed manager ever touches that shared,
     /// machine-wide file.
     home_conf_path: Option<PathBuf>,
+    /// Where to append change-history entries -- `(user_scope_path,
+    /// system_scope_path)`, matching `user_store`/`system_store`'s own
+    /// split. Same "nothing touches real shared state unless explicitly
+    /// configured" rule as `home_conf_path`: `None` for `with_stores`
+    /// unless `with_history_paths` is also called. See `settings::history`.
+    history_paths: Option<(PathBuf, PathBuf)>,
 }
 
 impl SettingsManager {
@@ -102,6 +109,7 @@ impl SettingsManager {
         let home_conf_path = paths::home_conf_path();
         services::home_conf::write_initial(&manager, &home_conf_path);
         manager.home_conf_path = Some(home_conf_path);
+        manager.history_paths = Some((paths::user_history_path(), paths::system_history_path()));
         Ok(manager)
     }
 
@@ -132,6 +140,7 @@ impl SettingsManager {
             ctx: permissions::current_context(),
             events: EventBus::new(),
             home_conf_path: None,
+            history_paths: None,
         })
     }
 
@@ -141,6 +150,15 @@ impl SettingsManager {
     /// touching real desktop state.
     pub fn with_home_conf_path(mut self, path: PathBuf) -> Self {
         self.home_conf_path = Some(path);
+        self
+    }
+
+    /// Points this manager's change history at explicit `(user_scope,
+    /// system_scope)` paths instead of the real, shared history logs —
+    /// used by tests that want to exercise history recording without
+    /// touching real state.
+    pub fn with_history_paths(mut self, user: PathBuf, system: PathBuf) -> Self {
+        self.history_paths = Some((user, system));
         self
     }
 
@@ -158,6 +176,21 @@ impl SettingsManager {
             .get(key)
             .ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?;
         Ok(self.values.get(key).unwrap_or(&spec.default))
+    }
+
+    /// The most recent change-history entries across both scopes (user
+    /// and system), newest first, merged and re-sorted by time. `None`
+    /// means this manager was never given history paths at all (a bare
+    /// `with_stores` manager with no `with_history_paths` call) -- as
+    /// opposed to `Some(vec![])`, a real but so-far-empty log.
+    pub fn recent_history(&self, count: usize) -> Option<Vec<history::HistoryEntry>> {
+        let (user_path, system_path) = self.history_paths.as_ref()?;
+        let mut entries = history::read_all(user_path);
+        entries.extend(history::read_all(system_path));
+        entries.sort_by_key(|e| e.timestamp_unix);
+        entries.reverse();
+        entries.truncate(count);
+        Some(entries)
     }
 
     pub fn set(&mut self, key: &str, value: Value) -> Result<(), SettingsError> {
@@ -208,6 +241,14 @@ impl SettingsManager {
         services::apply(key, &value);
         if let Some(path) = self.home_conf_path.clone() {
             services::home_conf::sync_if_relevant(key, self, &path);
+        }
+        if let Some((user_path, system_path)) = &self.history_paths {
+            let path = if spec.privilege > PrivilegeLevel::User {
+                system_path
+            } else {
+                user_path
+            };
+            history::append(path, key, &value);
         }
         self.events.publish(Event::SettingChanged {
             key: key.to_string(),
@@ -267,6 +308,35 @@ impl SettingsManager {
         Ok(())
     }
 
+    /// Validates every `(key, value)` pair against its spec's type, range,
+    /// and choices *before* applying any of them, then applies all of
+    /// them via `set` -- so one malformed value in an imported batch can't
+    /// leave some settings changed and others not because of a
+    /// *validation* failure. See `settings::json::values_from_json` for
+    /// turning an exported JSON document into the `pairs` this takes.
+    ///
+    /// This doesn't extend to a *permission* failure partway through the
+    /// second pass (an admin-only key with no daemon reachable, say) --
+    /// that can still stop a batch partly applied, the same as it could
+    /// for any other write; only shape/range/choice problems are
+    /// guaranteed to be caught up front. Returns the number of settings
+    /// changed on success.
+    pub fn import_values(&mut self, pairs: Vec<(String, Value)>) -> Result<usize, SettingsError> {
+        for (key, value) in &pairs {
+            let spec = self
+                .schema
+                .get(key)
+                .ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?;
+            validation::validate(spec, value).map_err(SettingsError::Invalid)?;
+        }
+
+        for (key, value) in &pairs {
+            self.set(key, value.clone())?;
+        }
+
+        Ok(pairs.len())
+    }
+
     fn persist(&self, spec: &SettingSpec) -> Result<(), SettingsError> {
         let is_system_scope = spec.privilege > PrivilegeLevel::User;
         let store = if is_system_scope {
@@ -315,6 +385,19 @@ impl SettingsManager {
             }
             Response::Err(msg) => Err(SettingsError::Daemon(msg)),
             Response::Data(_) => Ok(()),
+            // `set_via_daemon` only ever sends a `Request::Set`, and the
+            // daemon only ever replies `Grants` to `ListGrants` (see
+            // `ipc::server::dispatch`) -- so this arm should be
+            // unreachable in practice; `IpcClient::list_grants` is the
+            // one that actually consumes a `Grants` reply. Still
+            // required for exhaustiveness since both requests share one
+            // `Response` type, and surfacing it as a daemon error beats
+            // either a `todo!()` panic or silently discarding a reply
+            // that would mean the protocol got confused.
+            Response::Grants(_) => Err(SettingsError::Daemon(
+                "daemon sent a grants response to a settings write; this indicates a protocol bug"
+                    .to_string(),
+            )),
         }
     }
 }
@@ -470,6 +553,72 @@ mod tests {
             manager.get("security.automatic_security_updates").unwrap(),
             &Value::Bool(false)
         );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn import_values_applies_every_pair_when_all_are_valid() {
+        let (mut manager, dir) = isolated_manager(Mode::Standalone);
+        let count = manager
+            .import_values(vec![
+                ("sound.volume".to_string(), Value::Int(55)),
+                ("touchpad.tap_to_click".to_string(), Value::Bool(false)),
+            ])
+            .unwrap();
+
+        assert_eq!(count, 2);
+        assert_eq!(manager.get("sound.volume").unwrap(), &Value::Int(55));
+        assert_eq!(
+            manager.get("touchpad.tap_to_click").unwrap(),
+            &Value::Bool(false)
+        );
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn import_values_applies_nothing_when_one_pair_fails_validation() {
+        let (mut manager, dir) = isolated_manager(Mode::Standalone);
+        // display.brightness is 0..=100 -- 999 is out of range, so this
+        // whole batch should be rejected before either key is touched,
+        // even though sound.volume by itself would have been fine.
+        let result = manager.import_values(vec![
+            ("sound.volume".to_string(), Value::Int(55)),
+            ("display.brightness".to_string(), Value::Int(999)),
+        ]);
+
+        assert!(result.is_err());
+        assert_eq!(manager.get("sound.volume").unwrap(), &Value::Int(50));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn import_values_rejects_an_unknown_key() {
+        let (mut manager, dir) = isolated_manager(Mode::Standalone);
+        let result =
+            manager.import_values(vec![("no.such.key".to_string(), Value::Bool(true))]);
+        assert!(matches!(result, Err(SettingsError::UnknownKey(_))));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn recent_history_is_none_without_with_history_paths() {
+        let (manager, dir) = isolated_manager(Mode::Standalone);
+        assert!(manager.recent_history(10).is_none());
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_successful_set_is_recorded_in_history() {
+        let (manager, dir) = isolated_manager(Mode::Standalone);
+        let mut manager =
+            manager.with_history_paths(dir.join("user-history.log"), dir.join("system-history.log"));
+
+        manager.set("sound.volume", Value::Int(77)).unwrap();
+        let history = manager.recent_history(10).unwrap();
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].key, "sound.volume");
+        assert_eq!(history[0].value, Value::Int(77));
         std::fs::remove_dir_all(dir).ok();
     }
 }
