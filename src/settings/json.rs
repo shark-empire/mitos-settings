@@ -187,7 +187,8 @@ pub fn values_from_json(schema: &Schema, json: &str) -> Result<Vec<(String, Valu
         let spec = schema
             .get(&key)
             .ok_or_else(|| format!("unknown setting key: {key}"))?;
-        let value = parse_json_value(spec.kind, raw_value.trim()).map_err(|e| format!("{key}: {e}"))?;
+        let value =
+            parse_json_value(spec.kind, raw_value.trim()).map_err(|e| format!("{key}: {e}"))?;
         out.push((key, value));
     }
     Ok(out)
