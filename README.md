@@ -46,7 +46,7 @@ Settings
 
 ## What's here
 
-- **26 settings categories** (`src/categories/`), matching the full
+- **27 settings categories** (`src/categories/`), matching the full
   Personalization → About MITOS tree — each one a real `Category`
   implementation registering typed, validated settings.
 - **A typed settings core** (`src/settings/`): a small `Value` enum, a
@@ -78,8 +78,9 @@ Settings
   mitos-service) — not a local check. See the `grants` module's own
   doc comment.
 - **Three front-ends over one core**: a CLI (`get`/`set`/`list`/`reset`/
-  `pick-wallpaper`), an interactive text navigator, and the daemon's IPC
-  server — all three are thin shells over the same `SettingsManager`.
+  `schema`/`history`/`import`/`grants`/`pick-wallpaper`), an interactive
+  text navigator, and the daemon's IPC server — all three are thin shells
+  over the same `SettingsManager`.
 
 ## Building
 
@@ -96,8 +97,8 @@ No network access is required to build — see `Cargo.toml`.
 mitos-settings/           core crate: daemon, CLI, library (zero deps)
 ├── src/
 │   ├── app/            interactive text navigator
-│   ├── categories/      the 26 settings categories
-│   ├── cli/             get / set / list / reset / schema / pick-wallpaper
+│   ├── categories/      the 27 settings categories
+│   ├── cli/             get / set / list / reset / schema / history / import / grants / pick-wallpaper
 │   ├── config/           low-level config file I/O, paths, migrations
 │   ├── hardware/         read-only /proc, /sys introspection
 │   ├── ipc/               daemon protocol, client, server
@@ -116,6 +117,42 @@ Full docs in `docs/`:
 [`home-conf.md`](docs/home-conf.md) ·
 [`security.md`](docs/security.md) ·
 [`developers.md`](docs/developers.md)
+
+## Known gaps
+
+Called out explicitly so nobody re-discovers these by surprise:
+
+- **File-level locking across processes.** `SettingsManager::persist`
+  reads the whole store, changes one value, and writes it all back — two
+  processes doing that for different keys at nearly the same moment can
+  silently lose one change. `config::file_lock` is a ready,
+  dependency-free advisory lock (create a `.lock` file atomically; steal
+  it if the PID recorded inside it is dead) that isn't wired into
+  `persist` yet. Integration point: wrap `persist`'s body in
+  `config::file_lock::acquire(&lock_path, Duration::from_secs(2))?`,
+  where `lock_path` is `store.path().with_extension("lock")` — and map
+  the `Err(String)` it can return into a new `SettingsError` variant
+  (remembering every existing `match` on `SettingsError` then needs that
+  arm too).
+- **Cross-process live reload.** `notifications::EventBus` is real and
+  tested, but in-process only — nothing outside the process that made a
+  change hears about it, and the GUI doesn't subscribe to its own bus
+  either. A real fix needs the daemon to *push* change notifications to
+  connected clients over the IPC socket instead of only ever replying to
+  requests it received — a protocol change, not just a client-side
+  subscription.
+- **Multi-key transactions over IPC.** `SettingsManager::import_values`
+  validates a whole batch before applying any of it, but only for the
+  local, in-process path — a batch containing a daemon-forwarded,
+  Admin-privilege key can still apply some entries and fail partway
+  through, the same as any other single `set` call already can. A real
+  fix needs a new `Request`/`Response` pair the daemon applies atomically
+  server-side.
+- **`SettingSpec::dangerous`** only changes behavior in
+  `gui/src/widgets.rs`'s `build_switch` — the other four control-building
+  functions don't have a staged-apply path yet. That's fine today since
+  every setting marked `dangerous` so far is a `Bool`, but worth knowing
+  before marking a dropdown/spinner/entry-backed setting dangerous too.
 
 ## License
 
