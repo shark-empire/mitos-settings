@@ -110,7 +110,12 @@ fn trim(path: &Path, max_entries: usize) {
     }
     let mut out = String::new();
     for e in &entries[entries.len() - max_entries..] {
-        out.push_str(&format!("{} {} {}\n", e.timestamp_unix, e.key, e.value.encode()));
+        out.push_str(&format!(
+            "{} {} {}\n",
+            e.timestamp_unix,
+            e.key,
+            e.value.encode()
+        ));
     }
     let _ = std::fs::write(path, out);
 }

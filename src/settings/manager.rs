@@ -594,8 +594,7 @@ mod tests {
     #[test]
     fn import_values_rejects_an_unknown_key() {
         let (mut manager, dir) = isolated_manager(Mode::Standalone);
-        let result =
-            manager.import_values(vec![("no.such.key".to_string(), Value::Bool(true))]);
+        let result = manager.import_values(vec![("no.such.key".to_string(), Value::Bool(true))]);
         assert!(matches!(result, Err(SettingsError::UnknownKey(_))));
         std::fs::remove_dir_all(dir).ok();
     }
@@ -610,8 +609,8 @@ mod tests {
     #[test]
     fn a_successful_set_is_recorded_in_history() {
         let (manager, dir) = isolated_manager(Mode::Standalone);
-        let mut manager =
-            manager.with_history_paths(dir.join("user-history.log"), dir.join("system-history.log"));
+        let mut manager = manager
+            .with_history_paths(dir.join("user-history.log"), dir.join("system-history.log"));
 
         manager.set("sound.volume", Value::Int(77)).unwrap();
         let history = manager.recent_history(10).unwrap();
