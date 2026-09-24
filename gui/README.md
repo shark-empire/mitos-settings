@@ -1,10 +1,11 @@
 # mitos-settings-gui
 
 The graphical front-end for MITOS settings — so a user who's never opened
-a terminal never has to. A `StackSidebar` of the 26 categories on the
+a terminal never has to. A `StackSidebar` of the 27 categories on the
 left, a form on the right, one row per setting, generated straight from
-the schema. Same `SettingsManager` as the CLI and daemon underneath it —
-this crate is purely presentation.
+the schema, plus a search box that looks across every category at once.
+Same `SettingsManager` as the CLI and daemon underneath it — this crate
+is purely presentation.
 
 ```
 $ cargo build --release -p mitos-settings-gui
@@ -36,7 +37,19 @@ likely I think each one is to need a tweak:
    `state-set`) because their signature (`Fn(&Self)`, no return value) has
    stayed more stable across gtk-rs versions — but exact method names can
    still drift.
-3. Everything else (`Box::new`, `.append()`, `Adjustment::new`,
+3. **`src/window.rs`'s search box**: `gtk::SearchEntry`, its
+   `connect_search_changed` signal, and `.text()` via the `Editable`
+   trait it shares with `Entry` (already proven elsewhere in this file).
+   The one genuinely new property is `SearchEntry::set_placeholder_text`
+   — `Entry` definitely has it, `SearchEntry` almost certainly re-exposes
+   it, but that's the one line to check first if this specific file
+   doesn't build.
+4. **`src/widgets.rs`'s reset button**: `Box::insert_child_after`, used
+   to swap a freshly-rebuilt control into a row in place of the old one.
+   Standard, symmetrical with `append`/`prepend`/`remove` (all already
+   proven elsewhere in this file), but less-exercised in typical gtk4-rs
+   sample code than those three.
+5. Everything else (`Box::new`, `.append()`, `Adjustment::new`,
    `SpinButton::new`, `ApplicationWindow`, `.set_*` property setters,
    `.upcast()`/`.upcast_ref()`, `add_css_class`/`remove_css_class`) is
    foundational, long-stable GTK4 API that's shown the same way in
@@ -84,16 +97,18 @@ other app — no CLI knowledge needed anywhere in that path.
   update on its own — you'd need to restart the app to see it. `SettingsManager::events`
   (an `EventBus`) already exists for exactly this, but wiring an
   `mpsc::Receiver` into GTK's main loop safely (via `glib::MainContext`)
-  is its own chunk of GTK-specific API risk, so it's deliberately left out
-  of this first pass rather than compounding the risk in one shot.
+  is its own chunk of GTK-specific API risk. A *cross-process* version of
+  this (a CLI change showing up live here) needs the daemon to push over
+  the IPC socket in the first place — see the root README's "Known gaps".
 - **String lists** (`applications.startup_applications`,
   `language.keyboard_layouts`) are edited as plain comma-separated text,
   not a proper add/remove list widget.
-- **No search.** With 122 settings across 26 categories, a search bar
-  (`GtkSearchEntry` filtering the sidebar/rows) would help — straightforward
-  to add once the base UI is confirmed working.
 - **No live theming from `appearance.*`.** The window uses your system's
   default GTK4 theme; it doesn't apply `theme.mode`/`appearance.accent_color`
   to itself. A little on-the-nose for a settings app not to reflect its
   own settings, but avoiding GTK CSS-provider APIs kept this first pass
   smaller.
+- **`SettingSpec::dangerous`'s staged-then-confirm flow** only exists for
+  `build_switch` in `widgets.rs` — the other four control types don't
+  have it yet. Every `dangerous` setting today happens to be a `Bool`, so
+  this hasn't mattered in practice so far.
