@@ -8,12 +8,16 @@
 //! Two pieces of `SettingSpec` metadata get their own treatment here:
 //! `requires_restart` just adds a badge next to the label -- `set` still
 //! applies and persists immediately either way. `dangerous` changes
-//! *behavior*, but only for `build_switch` so far (the only control type
-//! any `dangerous` setting currently uses): toggling stages the change
-//! instead of writing it, and a separate "Apply" button commits it, so a
-//! stray tap can't silently flip something like the firewall or automatic
-//! login. The other four control types don't have a `dangerous` path yet
-//! -- extend them the same way if a future dangerous setting needs one.
+//! *behavior*, for every control type: instead of writing on the
+//! ordinary per-type signal (a switch's `active-notify`, a dropdown's
+//! `selected-notify`, a spin button's `value-changed`, an entry's
+//! `activate`), that signal only stages the change and enables a
+//! separate "Apply" button, which is what actually calls
+//! `SettingsManager::set` -- so a stray tap or an accidental keystroke
+//! can't silently flip something like the firewall or automatic login.
+//! Each `build_*` function below follows the same shape: an early
+//! return for the ordinary (non-`dangerous`) path, then the
+//! stage-then-Apply wrapper below it for when `spec.dangerous` is set.
 //!
 //! **API-risk note:** every GTK call here was written from memory of
 //! well-established gtk4-rs patterns, without a compiler to check against
@@ -230,19 +234,54 @@ fn build_dropdown(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) ->
 
     let dropdown = gtk::DropDown::from_strings(choices);
     dropdown.set_selected(current_index);
-
-    let key = spec.key;
-    let manager = Rc::clone(manager);
     let choices_owned: Vec<String> = choices.iter().map(|c| c.to_string()).collect();
-    dropdown.connect_selected_notify(move |dropdown| {
-        let Some(choice) = choices_owned.get(dropdown.selected() as usize) else {
-            return;
-        };
-        let result = manager.borrow_mut().set(key, Value::Str(choice.clone()));
-        report_result(dropdown.upcast_ref::<gtk::Widget>(), result);
-    });
 
-    dropdown.upcast::<gtk::Widget>()
+    if !spec.dangerous {
+        let key = spec.key;
+        let manager = Rc::clone(manager);
+        dropdown.connect_selected_notify(move |dropdown| {
+            let Some(choice) = choices_owned.get(dropdown.selected() as usize) else {
+                return;
+            };
+            let result = manager.borrow_mut().set(key, Value::Str(choice.clone()));
+            report_result(dropdown.upcast_ref::<gtk::Widget>(), result);
+        });
+        return dropdown.upcast::<gtk::Widget>();
+    }
+
+    // Dangerous: same stage-then-Apply shape as build_switch -- see this
+    // file's top doc comment.
+    let wrapper = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    wrapper.set_valign(gtk::Align::Center);
+    wrapper.append(&dropdown);
+
+    let apply_btn = gtk::Button::new();
+    apply_btn.set_label("Apply");
+    apply_btn.set_sensitive(false);
+    apply_btn.set_tooltip_text(Some("Dangerous settings need a separate confirmation"));
+    wrapper.append(&apply_btn);
+
+    {
+        let apply_btn = apply_btn.clone();
+        dropdown.connect_selected_notify(move |_dropdown| {
+            apply_btn.set_sensitive(true);
+        });
+    }
+    {
+        let key = spec.key;
+        let manager = Rc::clone(manager);
+        let dropdown_for_apply = dropdown.clone();
+        apply_btn.connect_clicked(move |btn| {
+            let Some(choice) = choices_owned.get(dropdown_for_apply.selected() as usize) else {
+                return;
+            };
+            let result = manager.borrow_mut().set(key, Value::Str(choice.clone()));
+            report_result(dropdown_for_apply.upcast_ref::<gtk::Widget>(), result);
+            btn.set_sensitive(false);
+        });
+    }
+
+    wrapper.upcast::<gtk::Widget>()
 }
 
 fn build_int_spin(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
@@ -257,16 +296,50 @@ fn build_int_spin(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) ->
     let adjustment = gtk::Adjustment::new(current as f64, lo, hi, 1.0, 10.0, 0.0);
     let spin = gtk::SpinButton::new(Some(&adjustment), 1.0, 0);
 
-    let key = spec.key;
-    let manager = Rc::clone(manager);
-    spin.connect_value_changed(move |spin| {
-        let result = manager
-            .borrow_mut()
-            .set(key, Value::Int(spin.value() as i64));
-        report_result(spin.upcast_ref::<gtk::Widget>(), result);
-    });
+    if !spec.dangerous {
+        let key = spec.key;
+        let manager = Rc::clone(manager);
+        spin.connect_value_changed(move |spin| {
+            let result = manager
+                .borrow_mut()
+                .set(key, Value::Int(spin.value() as i64));
+            report_result(spin.upcast_ref::<gtk::Widget>(), result);
+        });
+        return spin.upcast::<gtk::Widget>();
+    }
 
-    spin.upcast::<gtk::Widget>()
+    // Dangerous: same stage-then-Apply shape as build_switch -- see this
+    // file's top doc comment.
+    let wrapper = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    wrapper.set_valign(gtk::Align::Center);
+    wrapper.append(&spin);
+
+    let apply_btn = gtk::Button::new();
+    apply_btn.set_label("Apply");
+    apply_btn.set_sensitive(false);
+    apply_btn.set_tooltip_text(Some("Dangerous settings need a separate confirmation"));
+    wrapper.append(&apply_btn);
+
+    {
+        let apply_btn = apply_btn.clone();
+        spin.connect_value_changed(move |_spin| {
+            apply_btn.set_sensitive(true);
+        });
+    }
+    {
+        let key = spec.key;
+        let manager = Rc::clone(manager);
+        let spin_for_apply = spin.clone();
+        apply_btn.connect_clicked(move |btn| {
+            let result = manager
+                .borrow_mut()
+                .set(key, Value::Int(spin_for_apply.value() as i64));
+            report_result(spin_for_apply.upcast_ref::<gtk::Widget>(), result);
+            btn.set_sensitive(false);
+        });
+    }
+
+    wrapper.upcast::<gtk::Widget>()
 }
 
 fn build_float_spin(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gtk::Widget {
@@ -281,14 +354,48 @@ fn build_float_spin(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) 
     let adjustment = gtk::Adjustment::new(current, lo, hi, 0.01, 0.1, 0.0);
     let spin = gtk::SpinButton::new(Some(&adjustment), 0.01, 2);
 
-    let key = spec.key;
-    let manager = Rc::clone(manager);
-    spin.connect_value_changed(move |spin| {
-        let result = manager.borrow_mut().set(key, Value::Float(spin.value()));
-        report_result(spin.upcast_ref::<gtk::Widget>(), result);
-    });
+    if !spec.dangerous {
+        let key = spec.key;
+        let manager = Rc::clone(manager);
+        spin.connect_value_changed(move |spin| {
+            let result = manager.borrow_mut().set(key, Value::Float(spin.value()));
+            report_result(spin.upcast_ref::<gtk::Widget>(), result);
+        });
+        return spin.upcast::<gtk::Widget>();
+    }
 
-    spin.upcast::<gtk::Widget>()
+    // Dangerous: same stage-then-Apply shape as build_switch -- see this
+    // file's top doc comment.
+    let wrapper = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    wrapper.set_valign(gtk::Align::Center);
+    wrapper.append(&spin);
+
+    let apply_btn = gtk::Button::new();
+    apply_btn.set_label("Apply");
+    apply_btn.set_sensitive(false);
+    apply_btn.set_tooltip_text(Some("Dangerous settings need a separate confirmation"));
+    wrapper.append(&apply_btn);
+
+    {
+        let apply_btn = apply_btn.clone();
+        spin.connect_value_changed(move |_spin| {
+            apply_btn.set_sensitive(true);
+        });
+    }
+    {
+        let key = spec.key;
+        let manager = Rc::clone(manager);
+        let spin_for_apply = spin.clone();
+        apply_btn.connect_clicked(move |btn| {
+            let result = manager
+                .borrow_mut()
+                .set(key, Value::Float(spin_for_apply.value()));
+            report_result(spin_for_apply.upcast_ref::<gtk::Widget>(), result);
+            btn.set_sensitive(false);
+        });
+    }
+
+    wrapper.upcast::<gtk::Widget>()
 }
 
 /// Used for plain strings, hex colors, and string lists alike (v1: a
@@ -309,25 +416,72 @@ fn build_entry(spec: &SettingSpec, manager: &Rc<RefCell<SettingsManager>>) -> gt
         entry.set_placeholder_text(Some("#RRGGBB"));
     }
 
-    let key = spec.key;
-    let kind = spec.kind;
-    let manager = Rc::clone(manager);
-    entry.connect_activate(move |entry| {
-        let text = entry.text();
-        match Value::parse(kind, &text) {
-            Ok(value) => {
-                let result = manager.borrow_mut().set(key, value);
-                report_result(entry.upcast_ref::<gtk::Widget>(), result);
+    if !spec.dangerous {
+        let key = spec.key;
+        let kind = spec.kind;
+        let manager = Rc::clone(manager);
+        entry.connect_activate(move |entry| {
+            let text = entry.text();
+            match Value::parse(kind, &text) {
+                Ok(value) => {
+                    let result = manager.borrow_mut().set(key, value);
+                    report_result(entry.upcast_ref::<gtk::Widget>(), result);
+                }
+                Err(reason) => {
+                    entry.add_css_class("error");
+                    entry.set_tooltip_text(Some(reason.as_str()));
+                }
             }
-            Err(reason) => {
-                entry.add_css_class("error");
-                entry.set_tooltip_text(Some(reason.as_str()));
-            }
-        }
-    });
+        });
+        entry.connect_changed(|entry| entry.remove_css_class("error"));
+        return entry.upcast::<gtk::Widget>();
+    }
+
+    // Dangerous: same stage-then-Apply shape as build_switch, adapted for
+    // free text -- Apply is what parses and validates (on click, instead
+    // of the non-dangerous path's parse-on-Enter), and stays enabled
+    // again after a parse error rather than being marked applied, since
+    // there's still a pending edit that needs fixing.
     entry.connect_changed(|entry| entry.remove_css_class("error"));
 
-    entry.upcast::<gtk::Widget>()
+    let wrapper = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    wrapper.set_valign(gtk::Align::Center);
+    wrapper.append(&entry);
+
+    let apply_btn = gtk::Button::new();
+    apply_btn.set_label("Apply");
+    apply_btn.set_sensitive(false);
+    apply_btn.set_tooltip_text(Some("Dangerous settings need a separate confirmation"));
+    wrapper.append(&apply_btn);
+
+    {
+        let apply_btn = apply_btn.clone();
+        entry.connect_changed(move |_entry| {
+            apply_btn.set_sensitive(true);
+        });
+    }
+    {
+        let key = spec.key;
+        let kind = spec.kind;
+        let manager = Rc::clone(manager);
+        let entry_for_apply = entry.clone();
+        apply_btn.connect_clicked(move |btn| {
+            let text = entry_for_apply.text();
+            match Value::parse(kind, &text) {
+                Ok(value) => {
+                    let result = manager.borrow_mut().set(key, value);
+                    report_result(entry_for_apply.upcast_ref::<gtk::Widget>(), result);
+                    btn.set_sensitive(false);
+                }
+                Err(reason) => {
+                    entry_for_apply.add_css_class("error");
+                    entry_for_apply.set_tooltip_text(Some(reason.as_str()));
+                }
+            }
+        });
+    }
+
+    wrapper.upcast::<gtk::Widget>()
 }
 
 /// Applies (or clears) the "error" CSS styling GTK4 themes recognize, and
