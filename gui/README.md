@@ -92,14 +92,20 @@ other app — no CLI knowledge needed anywhere in that path.
 
 ## What's not handled yet (v1 scope)
 
-- **Live refresh.** If another process (the CLI, another instance of this
-  GUI, the daemon) changes a setting while this window is open, it won't
-  update on its own — you'd need to restart the app to see it. `SettingsManager::events`
-  (an `EventBus`) already exists for exactly this, but wiring an
-  `mpsc::Receiver` into GTK's main loop safely (via `glib::MainContext`)
-  is its own chunk of GTK-specific API risk. A *cross-process* version of
-  this (a CLI change showing up live here) needs the daemon to push over
-  the IPC socket in the first place — see the root README's "Known gaps".
+- ~~**Live refresh.**~~ Done: `window.rs` now polls both `SettingsManager::events`
+  (in-process — covers a hypothetical second window) and a new
+  `IpcClient::subscribe` connection (cross-process — the daemon pushes over
+  the IPC socket now, see the root README's "Known gaps") every 500ms on the
+  main loop, rebuilding the category stack when either has something
+  pending. Deliberately polling rather than pushing straight from the
+  background thread into GTK's main loop: that would need picking a
+  specific cross-thread channel type (`glib::MainContext::channel` or
+  whatever its current replacement is), which is exactly the kind of
+  version-specific API this crate can't verify without a compiler, so
+  `gtk::glib::source::timeout_add_local` — a plainer, longer-stable call —
+  was worth the small latency trade-off instead. That call itself is still
+  a best-effort guess at this crate's pinned gtk4-rs version's exact
+  spelling; see the comment above it in `window.rs`.
 - **String lists** (`applications.startup_applications`,
   `language.keyboard_layouts`) are edited as plain comma-separated text,
   not a proper add/remove list widget.
@@ -108,7 +114,6 @@ other app — no CLI knowledge needed anywhere in that path.
   to itself. A little on-the-nose for a settings app not to reflect its
   own settings, but avoiding GTK CSS-provider APIs kept this first pass
   smaller.
-- **`SettingSpec::dangerous`'s staged-then-confirm flow** only exists for
-  `build_switch` in `widgets.rs` — the other four control types don't
-  have it yet. Every `dangerous` setting today happens to be a `Bool`, so
-  this hasn't mattered in practice so far.
+- ~~**`SettingSpec::dangerous`'s staged-then-confirm flow**~~ Done: all
+  five `build_*` control functions in `widgets.rs` now share the same
+  stage-then-Apply shape `build_switch` originated.
