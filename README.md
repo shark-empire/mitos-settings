@@ -120,39 +120,34 @@ Full docs in `docs/`:
 
 ## Known gaps
 
-Called out explicitly so nobody re-discovers these by surprise:
+Called out explicitly so nobody re-discovers these by surprise. The four
+items below were closed in a pass with no working Rust compiler available
+(see "Read this before building") — read them as "should be right, matched
+against the existing types and patterns as closely as possible," not
+"verified":
 
-- **File-level locking across processes.** `SettingsManager::persist`
-  reads the whole store, changes one value, and writes it all back — two
-  processes doing that for different keys at nearly the same moment can
-  silently lose one change. `config::file_lock` is a ready,
-  dependency-free advisory lock (create a `.lock` file atomically; steal
-  it if the PID recorded inside it is dead) that isn't wired into
-  `persist` yet. Integration point: wrap `persist`'s body in
-  `config::file_lock::acquire(&lock_path, Duration::from_secs(2))?`,
-  where `lock_path` is `store.path().with_extension("lock")` — and map
-  the `Err(String)` it can return into a new `SettingsError` variant
-  (remembering every existing `match` on `SettingsError` then needs that
-  arm too).
-- **Cross-process live reload.** `notifications::EventBus` is real and
-  tested, but in-process only — nothing outside the process that made a
-  change hears about it, and the GUI doesn't subscribe to its own bus
-  either. A real fix needs the daemon to *push* change notifications to
-  connected clients over the IPC socket instead of only ever replying to
-  requests it received — a protocol change, not just a client-side
-  subscription.
-- **Multi-key transactions over IPC.** `SettingsManager::import_values`
-  validates a whole batch before applying any of it, but only for the
-  local, in-process path — a batch containing a daemon-forwarded,
-  Admin-privilege key can still apply some entries and fail partway
-  through, the same as any other single `set` call already can. A real
-  fix needs a new `Request`/`Response` pair the daemon applies atomically
-  server-side.
-- **`SettingSpec::dangerous`** only changes behavior in
-  `gui/src/widgets.rs`'s `build_switch` — the other four control-building
-  functions don't have a staged-apply path yet. That's fine today since
-  every setting marked `dangerous` so far is a `Bool`, but worth knowing
-  before marking a dropdown/spinner/entry-backed setting dangerous too.
+- ~~**File-level locking across processes.**~~ Done: `SettingsManager::persist`
+  now acquires `config::file_lock::acquire(&lock_path, Duration::from_secs(2))`
+  (`lock_path = store.path().with_extension("lock")`) before its
+  read-modify-write, mapping a timeout into the new `SettingsError::Locked`
+  variant — the one other place that matches on `SettingsError` (`Display`)
+  was updated too.
+- ~~**Cross-process live reload.**~~ Done: `Request::Subscribe` puts an IPC
+  connection into a push-only mode where the daemon relays its own
+  `EventBus` as `ChangeNotice` lines (`ipc::server::handle_subscriber`);
+  `IpcClient::subscribe` is the client side, used by the GUI (see
+  `gui/README.md`).
+- ~~**Multi-key transactions over IPC.**~~ Done: a new `Request::SetMany`
+  carries the whole batch to the daemon, which validates and applies all of
+  it against one `SettingsManager` instance
+  (`SettingsManager::import_values_for_peer`) rather than one `Set` per
+  key — `SettingsManager::import_values` now forwards the whole batch this
+  way whenever any key in it needs escalation beyond what the calling
+  process holds.
+- ~~**`SettingSpec::dangerous`**~~ Done: `build_dropdown`/`build_int_spin`/
+  `build_float_spin`/`build_entry` all got the same staged-then-`Apply`
+  treatment `build_switch` already had, so a future non-`Bool` dangerous
+  setting isn't a special case anymore.
 
 ## License
 
