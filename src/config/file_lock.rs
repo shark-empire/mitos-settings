@@ -4,9 +4,9 @@
 //! requests hitting one running daemon) is already handled by
 //! `Arc<Mutex<SettingsManager>>` in `ipc::server`; this is for the
 //! separate case of, say, the GUI and a CLI `set` both touching
-//! `settings.conf` at nearly the same moment. Not yet wired into
-//! `persist` -- see this crate's README for why, and for the exact
-//! integration point once that's wanted.
+//! `settings.conf` at nearly the same moment. Wired into `persist`
+//! (`settings::manager`), held only for that function's own
+//! read-modify-write.
 //!
 //! Exclusive access is "I successfully created this `.lock` file":
 //! `OpenOptions::create_new` is atomic at the filesystem level, so
@@ -82,7 +82,10 @@ fn try_create(path: &Path) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
     write!(file, "{}", std::process::id())
 }
 
