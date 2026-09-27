@@ -88,9 +88,9 @@ impl Category for NetworkCategory {
     }
 
     fn live_info(&self) -> Vec<(&'static str, String)> {
-        crate::services::network::list_interfaces()
+        crate::services::network::live_status()
             .into_iter()
-            .map(|i| ("interface", format!("{}: {}", i.name, i.operstate)))
+            .map(|(_, value)| ("interface", value))
             .collect()
     }
 }
