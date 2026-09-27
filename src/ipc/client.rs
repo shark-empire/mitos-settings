@@ -1,16 +1,22 @@
-use super::protocol::{Request, Response};
+use super::protocol::{ChangeNotice, Request, Response};
+use crate::config::paths;
 use crate::grants::{Decision, Grant, Scope};
+use crate::settings::value::Value;
 use std::io::BufReader;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver};
+use std::thread;
 use std::time::Duration;
 
 pub struct IpcClient;
 
-// Helper to get the default socket path.
-// IMPORTANT: Adjust this string if your daemon binds to a different location!
+// The daemon's socket path lives in one place, `config::paths`
+// (`settings::manager` builds on it too, for `set_via_daemon`) -- this
+// just forwards to it instead of keeping its own copy that could drift
+// from the real one.
 fn default_socket_path() -> PathBuf {
-    PathBuf::from("/run/mitos-settings/daemon.sock")
+    paths::daemon_socket_path()
 }
 
 impl IpcClient {
@@ -124,5 +130,38 @@ impl IpcClient {
             Ok(other) => Err(format!("unexpected daemon response: {other:?}")),
             Err(e) => Err(format!("could not communicate with daemon: {e}")),
         }
+    }
+
+    /// Opens a dedicated, long-lived connection to `socket` and asks the
+    /// daemon to push every future setting change over it (see
+    /// `protocol::Request::Subscribe`), so a long-running client can
+    /// reflect a change made by *another* process -- another
+    /// `mitos-settings` invocation, another instance of the same GUI, or
+    /// mitos-service -- without polling `GET`/`LIST`. Spawns a
+    /// background thread that blocks reading the socket and forwards
+    /// each parsed `(key, value)` pair into the returned channel; the
+    /// thread ends (closing the channel) once the daemon connection
+    /// drops, so callers should treat a closed `Receiver` as "not
+    /// subscribed anymore," not as an error to propagate. This doesn't
+    /// use `send`/`send_with_timeout`: those expect exactly one
+    /// `Response`, and a subscription is an open-ended stream of
+    /// `ChangeNotice`s instead. See `gui/src/main.rs` for how the GUI
+    /// bridges this into GTK's own main loop.
+    pub fn subscribe(socket: &Path) -> std::io::Result<Receiver<(String, Value)>> {
+        let stream = UnixStream::connect(socket)?;
+        Request::Subscribe.write_to(&stream)?;
+
+        let (tx, rx) = mpsc::channel();
+        let read_stream = stream.try_clone()?;
+        thread::spawn(move || {
+            let mut reader = BufReader::new(read_stream);
+            while let Ok(Some(notice)) = ChangeNotice::read_from(&mut reader) {
+                if tx.send((notice.key, notice.value)).is_err() {
+                    break; // receiving end dropped -- caller stopped listening
+                }
+            }
+        });
+
+        Ok(rx)
     }
 }

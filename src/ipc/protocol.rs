@@ -5,11 +5,19 @@
 //! kinds.
 //!
 //! Requests: `GET <key>` / `SET <key> <encoded-value>` / `LIST [<category>]`
-//! / `RESET <key|--all>` / `PING` / `WHOAMI`
+//! / `RESET <key|--all>` / `PING` / `WHOAMI` / a multi-line `SETMANY`
+//! (one `SET`-shaped row per pair, `END`-terminated) / `SUBSCRIBE`
 //!
 //! Responses: `OK <message>` / `ERR <message>` / a multi-line `OK` header
 //! followed by `DATA <key>=<value>` rows and a terminating `END` (used for
 //! `LIST`).
+//!
+//! `SUBSCRIBE` is different from every other request: the daemon never
+//! sends it a `Response` at all. Instead the connection stays open and
+//! the daemon pushes an unsolicited `ChangeNotice` (`CHANGED
+//! <key>=<encoded-value>`) every time any connection's write succeeds,
+//! for as long as the peer stays connected. See `ChangeNotice` and
+//! `ipc::server::handle_subscriber`.
 
 use crate::grants::{Decision, Grant, Risk, Scope};
 use crate::settings::value::Value;
@@ -71,6 +79,26 @@ pub enum Request {
         sha256: String,
         capability: String,
     },
+
+    /// Apply every `(key, value)` pair atomically: the daemon validates
+    /// the whole batch before applying any of it, the same
+    /// validate-then-apply shape `SettingsManager::import_values` already
+    /// uses locally -- see `SettingsManager::import_values_for_peer`.
+    /// Exists because a batch sent as separate `Set` requests can apply
+    /// some and fail partway if one fails after others already
+    /// succeeded; see README's "Known gaps".
+    SetMany { pairs: Vec<(String, Value)> },
+
+    /// Puts this connection into subscribe mode. After this, the daemon
+    /// expects no further requests on it and instead pushes an
+    /// unsolicited `ChangeNotice` (`CHANGED <key>=<encoded-value>`)
+    /// every time any connection's write succeeds -- this connection's
+    /// own writes included. Lets a long-running client (the GUI, mainly)
+    /// reflect a setting changed by another process without polling.
+    /// `ipc::client::subscribe` is the client-side counterpart; nothing
+    /// currently mixes this with ordinary requests on the same
+    /// connection, and the daemon doesn't support that.
+    Subscribe,
 }
 
 #[derive(Debug, Clone)]
@@ -135,6 +163,21 @@ impl Request {
                 writeln!(w, "{sha256}")?;
                 writeln!(w, "{capability}")
             }
+
+            // Same "bare verb, then one row per pair, `END`-terminated"
+            // shape `Response::Data`/`Response::Grants` already use --
+            // each row reuses `SET`'s own `key value` framing so it
+            // parses with the exact same line-splitting `read_from`
+            // already does for a standalone `SET`.
+            Request::SetMany { pairs } => {
+                writeln!(w, "SETMANY")?;
+                for (key, value) in pairs {
+                    writeln!(w, "SET {key} {}", value.encode())?;
+                }
+                writeln!(w, "END")
+            }
+
+            Request::Subscribe => writeln!(w, "SUBSCRIBE"),
         }
     }
 
@@ -232,6 +275,39 @@ impl Request {
 
                 Ok(Request::RevokeGrant { sha256, capability })
             }
+
+            "SETMANY" => {
+                let mut pairs = Vec::new();
+                loop {
+                    let mut row = String::new();
+                    if r.read_line(&mut row)? == 0 {
+                        // EOF mid-batch -- malformed, but return what
+                        // parsed rather than hanging; the daemon will
+                        // reject an empty/short batch on its own terms.
+                        break;
+                    }
+                    let row = row.trim_end();
+                    if row == "END" {
+                        break;
+                    }
+                    let mut row_parts = row.splitn(3, ' ');
+                    let row_verb = row_parts.next().unwrap_or("");
+                    if row_verb != "SET" {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("expected a SET row inside SETMANY, got '{row}'"),
+                        ));
+                    }
+                    let key = row_parts.next().unwrap_or("").to_string();
+                    let value_raw = row_parts.next().unwrap_or("");
+                    let value = Value::decode(value_raw)
+                        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                    pairs.push((key, value));
+                }
+                Ok(Request::SetMany { pairs })
+            }
+
+            "SUBSCRIBE" => Ok(Request::Subscribe),
 
             other => Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -338,6 +414,56 @@ impl Response {
     }
 }
 
+/// An unsolicited notification the daemon pushes to every connection in
+/// subscribe mode (see `Request::Subscribe`) whenever a setting changes:
+/// `CHANGED <key>=<encoded-value>`, one per line, with no `END`
+/// terminator between them -- unlike `Response::Data`/`Grants`, this is
+/// an open-ended stream rather than a single bounded reply. Not a
+/// `Response` variant: nothing ever replies to a subscribed connection,
+/// so it doesn't share `Response`'s `OK`/`ERR`/`DATA` framing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChangeNotice {
+    pub key: String,
+    pub value: Value,
+}
+
+impl ChangeNotice {
+    pub fn write_to<W: Write>(&self, mut w: W) -> io::Result<()> {
+        writeln!(w, "CHANGED {}={}", self.key, self.value.encode())
+    }
+
+    /// `Ok(None)` means the connection closed (EOF) -- the ordinary way
+    /// a subscription ends when the peer disconnects, not an error.
+    pub fn read_from<R: BufRead>(mut r: R) -> io::Result<Option<ChangeNotice>> {
+        let mut line = String::new();
+        if r.read_line(&mut line)? == 0 {
+            return Ok(None);
+        }
+        let line = line.trim_end();
+        let rest = line.strip_prefix("CHANGED ").ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("expected a CHANGED line, got '{line}'"),
+            )
+        })?;
+        // `split_once` (not `split`) so a `str`-kind value containing its
+        // own `=` still decodes correctly -- same reasoning as
+        // `Response::read_from`'s `DATA` row parsing.
+        let (key, encoded) = rest.split_once('=').ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("malformed CHANGED line '{line}'"),
+            )
+        })?;
+        let value =
+            Value::decode(encoded).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        Ok(Some(ChangeNotice {
+            key: key.to_string(),
+            value,
+        }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,6 +500,14 @@ mod tests {
                 sha256: "b".repeat(64),
                 capability: "camera".into(),
             },
+            Request::SetMany {
+                pairs: vec![
+                    ("sound.volume".into(), Value::Int(55)),
+                    ("display.brightness".into(), Value::Int(80)),
+                ],
+            },
+            Request::SetMany { pairs: vec![] },
+            Request::Subscribe,
         ];
         for req in requests {
             let mut buf = Vec::new();
@@ -448,5 +582,35 @@ mod tests {
         Response::Grants(vec![]).write_to(&mut buf).unwrap();
         let parsed = Response::read_from(Cursor::new(buf)).unwrap();
         assert!(matches!(parsed, Response::Grants(rows) if rows.is_empty()));
+    }
+
+    #[test]
+    fn change_notice_round_trips() {
+        let notice = ChangeNotice {
+            key: "sound.volume".into(),
+            value: Value::Int(55),
+        };
+        let mut buf = Vec::new();
+        notice.write_to(&mut buf).unwrap();
+        let parsed = ChangeNotice::read_from(Cursor::new(buf)).unwrap();
+        assert_eq!(parsed, Some(notice));
+    }
+
+    #[test]
+    fn change_notice_round_trips_a_str_value_containing_its_own_equals_sign() {
+        let notice = ChangeNotice {
+            key: "network.proxy_mode".into(),
+            value: Value::Str("http://user:pass@host:8080/?token=abc=def".into()),
+        };
+        let mut buf = Vec::new();
+        notice.write_to(&mut buf).unwrap();
+        let parsed = ChangeNotice::read_from(Cursor::new(buf)).unwrap();
+        assert_eq!(parsed, Some(notice));
+    }
+
+    #[test]
+    fn change_notice_read_from_returns_none_at_eof() {
+        let parsed = ChangeNotice::read_from(Cursor::new(Vec::new())).unwrap();
+        assert!(parsed.is_none());
     }
 }

@@ -1,6 +1,7 @@
 use super::permissions::{ensure_daemon_may_apply, peer_credentials};
-use super::protocol::{Request, Response};
+use super::protocol::{ChangeNotice, Request, Response};
 use crate::grants::service_client;
+use crate::notifications::events::Event;
 use crate::permissions::{self, AuthContext};
 use crate::settings::manager::SettingsManager;
 use std::io::BufReader;
@@ -105,6 +106,15 @@ fn handle(stream: UnixStream, manager: &Arc<Mutex<SettingsManager>>) {
         }
     };
 
+    // `Subscribe` doesn't fit `dispatch`'s "compute one `Response`,
+    // write it, done" shape at all -- it needs the raw `stream` for an
+    // open-ended push loop instead of a single reply -- so it's
+    // intercepted here, before `dispatch` ever sees it.
+    if matches!(request, Request::Subscribe) {
+        handle_subscriber(stream, manager);
+        return;
+    }
+
     // `SetGrant` for a dangerous capability can sit here for as long
     // as mitos-session's own prompt timeout allows (a couple of
     // minutes by default) waiting on a human, relayed through
@@ -114,6 +124,35 @@ fn handle(stream: UnixStream, manager: &Arc<Mutex<SettingsManager>>) {
     // until then either.
     let response = dispatch(request, manager, &peer);
     let _ = response.write_to(&stream);
+}
+
+/// A subscribed connection never sends another request after
+/// `Subscribe` -- see that variant's doc comment -- so this doesn't
+/// share `handle`'s one-request-then-reply shape. Blocks this
+/// connection's dedicated thread for as long as the peer stays
+/// connected, forwarding every `Event::SettingChanged` published on
+/// `manager`'s bus (by *any* connection's write, this one included, so
+/// a client that both writes and subscribes on separate connections
+/// sees its own changes echoed back too -- harmless, just a redundant
+/// refresh) as a `ChangeNotice` line. See README's "Known gaps".
+fn handle_subscriber(stream: UnixStream, manager: &Arc<Mutex<SettingsManager>>) {
+    // Only held long enough to register the subscription and grab the
+    // `Receiver` -- released immediately after, so a long-lived
+    // subscriber never blocks ordinary requests the way holding this
+    // lock for the connection's whole lifetime would.
+    let rx = match manager.lock() {
+        Ok(m) => m.events.subscribe(),
+        Err(_) => return,
+    };
+
+    for event in rx {
+        let Event::SettingChanged { key, value } = event else {
+            continue; // Event::System(_) isn't a setting change to push
+        };
+        if ChangeNotice { key, value }.write_to(&stream).is_err() {
+            break; // peer disconnected (or the pipe otherwise broke)
+        }
+    }
 }
 
 /// Routes a request to whichever backend it actually needs:
@@ -229,16 +268,40 @@ fn dispatch_settings(
             Response::Data(rows)
         }
 
-        // `dispatch` only ever forwards here after routing Ping/WhoAmI/
-        // ChangePassword/ListGrants/SetGrant/RevokeGrant to their own
-        // handling -- every remaining `Request` variant is a settings one.
+        Request::SetMany { pairs } => {
+            // Same daemon-identity check `Set`'s arm runs above, just
+            // for every key in the batch before any of it is applied --
+            // a Root-level key in a batch a non-root daemon can't
+            // actually enforce should fail the whole batch, not just
+            // whichever key happens to be a `Set` when it's caught.
+            for (key, _) in &pairs {
+                if let Some(spec) = manager.schema().get(key) {
+                    if let Err(e) = ensure_daemon_may_apply(spec) {
+                        return Response::Err(e);
+                    }
+                }
+            }
+            match manager.import_values_for_peer(pairs, peer) {
+                Ok(count) => Response::Ok(format!("applied {count}")),
+                Err(e) => Response::Err(e.to_string()),
+            }
+        }
+
+        // `dispatch` routes Ping/WhoAmI/ChangePassword/ListGrants/
+        // SetGrant/RevokeGrant to their own handling before ever calling
+        // `dispatch_settings`, and `handle` intercepts `Subscribe` even
+        // earlier than that -- it needs the raw stream for an
+        // open-ended push loop, not a single `Response` (see
+        // `handle_subscriber`) -- so every remaining `Request` variant
+        // reaching here is a settings one.
         Request::Ping
         | Request::WhoAmI
         | Request::ChangePassword { .. }
         | Request::ListGrants
         | Request::SetGrant { .. }
-        | Request::RevokeGrant { .. } => {
-            unreachable!("dispatch() routes these before ever calling dispatch_settings")
+        | Request::RevokeGrant { .. }
+        | Request::Subscribe => {
+            unreachable!("dispatch()/handle() route these before ever calling dispatch_settings")
         }
     }
 }
