@@ -46,7 +46,7 @@ Settings
 
 ## What's here
 
-- **27 settings categories** (`src/categories/`), matching the full
+- **29 settings categories** (`src/categories/`), matching the full
   Personalization → About MITOS tree — each one a real `Category`
   implementation registering typed, validated settings.
 - **A typed settings core** (`src/settings/`): a small `Value` enum, a
@@ -97,7 +97,7 @@ No network access is required to build — see `Cargo.toml`.
 mitos-settings/           core crate: daemon, CLI, library (zero deps)
 ├── src/
 │   ├── app/            interactive text navigator
-│   ├── categories/      the 27 settings categories
+│   ├── categories/      the 29 settings categories
 │   ├── cli/             get / set / list / reset / schema / history / import / grants / pick-wallpaper
 │   ├── config/           low-level config file I/O, paths, migrations
 │   ├── hardware/         read-only /proc, /sys introspection
