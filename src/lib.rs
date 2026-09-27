@@ -15,6 +15,7 @@ pub mod config;
 pub mod grants;
 pub mod hardware;
 pub mod ipc;
+pub mod network;
 pub mod notifications;
 pub mod permissions;
 pub mod platform;
