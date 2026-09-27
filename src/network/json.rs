@@ -110,9 +110,7 @@ impl Json {
     /// instead -- use `as_str` for that case).
     pub fn as_single_variant(&self) -> Option<(&str, &Json)> {
         match self {
-            Json::Object(fields) if fields.len() == 1 => {
-                Some((fields[0].0.as_str(), &fields[0].1))
-            }
+            Json::Object(fields) if fields.len() == 1 => Some((fields[0].0.as_str(), &fields[0].1)),
             _ => None,
         }
     }
@@ -133,7 +131,10 @@ impl Json {
 
     pub fn get(&self, key: &str) -> Option<&Json> {
         match self {
-            Json::Object(fields) => fields.iter().find(|(k, _)| k.as_str() == key).map(|(_, v)| v),
+            Json::Object(fields) => fields
+                .iter()
+                .find(|(k, _)| k.as_str() == key)
+                .map(|(_, v)| v),
             _ => None,
         }
     }
