@@ -10,6 +10,7 @@
 //! - `notifications::EventBus` tells anyone listening that it happened
 
 use crate::categories;
+use crate::config::file_lock;
 use crate::config::paths;
 use crate::ipc::client::IpcClient;
 use crate::ipc::protocol::{Request, Response};
@@ -25,6 +26,7 @@ use crate::settings::value::Value;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Debug)]
 pub enum SettingsError {
@@ -37,6 +39,12 @@ pub enum SettingsError {
     },
     Io(std::io::Error),
     Daemon(String),
+    /// Couldn't acquire `config::file_lock` within `persist`'s timeout --
+    /// another process (or another thread's peer connection, though
+    /// that's normally serialized by the daemon's own `Mutex` first) is
+    /// mid-write to the same store. The message is already descriptive
+    /// (see `file_lock::acquire`), so `Display` passes it through as-is.
+    Locked(String),
 }
 
 impl fmt::Display for SettingsError {
@@ -55,6 +63,7 @@ impl fmt::Display for SettingsError {
             ),
             SettingsError::Io(e) => write!(f, "{e}"),
             SettingsError::Daemon(e) => write!(f, "daemon error: {e}"),
+            SettingsError::Locked(e) => write!(f, "{e}"),
         }
     }
 }
@@ -330,11 +339,103 @@ impl SettingsManager {
             validation::validate(spec, value).map_err(SettingsError::Invalid)?;
         }
 
+        // If every pair is one this process can write directly, apply
+        // them locally exactly as before. But if *any* pair needs more
+        // privilege than this process holds, the whole batch has to go
+        // to the daemon as one `SetMany` (see `import_values_via_daemon`)
+        // instead of falling through to `set`'s own per-key
+        // `set_via_daemon` forwarding below -- one `Set` per key would
+        // mean a batch that mixes ordinary and admin-level settings
+        // could apply some and fail partway on the daemon side, the
+        // exact partial-batch problem this validate-first pass exists to
+        // prevent. See README's "Known gaps".
+        let held = self.ctx.level();
+        let needs_daemon = self.mode == Mode::Standalone
+            && pairs.iter().any(|(key, _)| {
+                self.schema
+                    .get(key)
+                    .map(|spec| spec.privilege > PrivilegeLevel::User && held < spec.privilege)
+                    .unwrap_or(false)
+            });
+
+        if needs_daemon {
+            return self.import_values_via_daemon(pairs);
+        }
+
         for (key, value) in &pairs {
             self.set(key, value.clone())?;
         }
 
         Ok(pairs.len())
+    }
+
+    /// Peer-authorized counterpart to `import_values`, used by the daemon
+    /// (via `Request::SetMany`) to apply an already-forwarded batch
+    /// against `peer`'s privilege. Same validate-everything-then-apply-
+    /// everything shape as `import_values`, but every pair goes through
+    /// `set_for_peer` against *this* manager instance -- since this only
+    /// ever runs inside the daemon process, on the one `SettingsManager`
+    /// behind `ipc::server`'s `Mutex`, applying the whole batch here
+    /// (instead of replying once per key) is what actually makes a
+    /// multi-key daemon-forwarded import atomic.
+    pub fn import_values_for_peer(
+        &mut self,
+        pairs: Vec<(String, Value)>,
+        peer: &AuthContext,
+    ) -> Result<usize, SettingsError> {
+        for (key, value) in &pairs {
+            let spec = self
+                .schema
+                .get(key)
+                .ok_or_else(|| SettingsError::UnknownKey(key.to_string()))?;
+            validation::validate(spec, value).map_err(SettingsError::Invalid)?;
+        }
+
+        for (key, value) in &pairs {
+            self.set_for_peer(key, value.clone(), peer)?;
+        }
+
+        Ok(pairs.len())
+    }
+
+    /// Forwards a whole validated batch to the daemon in one `SetMany`
+    /// request rather than one `Set` per key -- see `import_values`'s
+    /// doc comment for why that distinction matters. Mirrors
+    /// `set_via_daemon`'s shape and error handling.
+    fn import_values_via_daemon(
+        &mut self,
+        pairs: Vec<(String, Value)>,
+    ) -> Result<usize, SettingsError> {
+        let socket = paths::daemon_socket_path();
+        let request = Request::SetMany {
+            pairs: pairs.clone(),
+        };
+        let response = IpcClient::send(&socket, &request).map_err(|e| {
+            SettingsError::Daemon(format!(
+                "could not reach the daemon at {}: {e} (is it running? try `sudo mitos-settings --daemon`)",
+                socket.display()
+            ))
+        })?;
+
+        match response {
+            Response::Ok(_) => {
+                let count = pairs.len();
+                for (key, value) in pairs {
+                    self.values.insert(key.clone(), value.clone());
+                    self.events.publish(Event::SettingChanged { key, value });
+                }
+                Ok(count)
+            }
+            Response::Err(msg) => Err(SettingsError::Daemon(msg)),
+            // Same "should be unreachable, but the match still has to be
+            // exhaustive" situation `set_via_daemon` documents on its
+            // own matching arm.
+            Response::Data(_) => Ok(pairs.len()),
+            Response::Grants(_) => Err(SettingsError::Daemon(
+                "daemon sent a grants response to a settings write; this indicates a protocol bug"
+                    .to_string(),
+            )),
+        }
     }
 
     fn persist(&self, spec: &SettingSpec) -> Result<(), SettingsError> {
@@ -344,6 +445,18 @@ impl SettingsManager {
         } else {
             &self.user_store
         };
+
+        // Cross-process guard for the read-modify-write below -- the
+        // in-process case (multiple IPC requests hitting one running
+        // daemon) is already serialized by `Arc<Mutex<SettingsManager>>`
+        // in `ipc::server`; this is for a separate process (the GUI, a
+        // second CLI invocation) touching the same store at nearly the
+        // same moment. See `config::file_lock`'s doc comment. Held only
+        // for the duration of this function -- `_lock` drops (and
+        // releases) at the end of the block, before `persist` returns.
+        let lock_path = store.path().with_extension("lock");
+        let _lock =
+            file_lock::acquire(&lock_path, Duration::from_secs(2)).map_err(SettingsError::Locked)?;
 
         let subset: HashMap<String, Value> = self
             .values
@@ -594,7 +707,8 @@ mod tests {
     #[test]
     fn import_values_rejects_an_unknown_key() {
         let (mut manager, dir) = isolated_manager(Mode::Standalone);
-        let result = manager.import_values(vec![("no.such.key".to_string(), Value::Bool(true))]);
+        let result =
+            manager.import_values(vec![("no.such.key".to_string(), Value::Bool(true))]);
         assert!(matches!(result, Err(SettingsError::UnknownKey(_))));
         std::fs::remove_dir_all(dir).ok();
     }
@@ -609,8 +723,8 @@ mod tests {
     #[test]
     fn a_successful_set_is_recorded_in_history() {
         let (manager, dir) = isolated_manager(Mode::Standalone);
-        let mut manager = manager
-            .with_history_paths(dir.join("user-history.log"), dir.join("system-history.log"));
+        let mut manager =
+            manager.with_history_paths(dir.join("user-history.log"), dir.join("system-history.log"));
 
         manager.set("sound.volume", Value::Int(77)).unwrap();
         let history = manager.recent_history(10).unwrap();
