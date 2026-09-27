@@ -296,13 +296,27 @@ it documented-but-unbuilt like the D-Bus assumptions above:
    (or eventually, a real internal registry).
 3. **`mitos-network`** exists as its own top-level component, and
    `categories::network`/`services::network`/`hardware::network` already
-   exist here too. Does `mitos-network` **own** network configuration
-   (meaning this repo's network category should become a thin client of
-   whatever `mitos-network` exposes), or is `mitos-network` something
-   lower-level (a stack/driver manager) that sits *underneath* what's
-   here? Right now `services::network` shells out to `nmcli`/`ip`
-   directly — worth knowing before that grows further in a direction
-   that conflicts with what `mitos-network` is doing.
+   exist here too. **Answered**, now against mitos-network's actual
+   source (`docs/mitos-network-reference/`, not just its descriptive
+   guide): yes, `mitos-network` owns this state, the same relationship
+   `grants` already has with mitos-service. `services::bluetooth` is a
+   thin client of it (`BluetoothPower`/`BluetoothScan`/
+   `ListBluetoothDevices`) instead of shelling out to `bluetoothctl`, and
+   `services::network` now covers `network.proxy_mode`
+   (read-modify-write against `GetProxyConfig`/`SetProxyConfig`, to
+   avoid clobbering fields this crate's schema doesn't carry) and
+   `network.vpn_active_profile` (name -> `id` resolution via
+   `ListConnections`, then `Activate`/`DeactivateConnection`) — see
+   `services::network`'s and `services::bluetooth`'s own doc comments.
+   What's still *not* wired, confirmed absent from the real schema
+   rather than just unevidenced: `network.wifi_enabled` (still `nmcli`
+   -- no radio on/off request exists in `Request` at all),
+   `network.ethernet_enabled`, `network.dns_servers` (DNS is
+   per-connection, `ConnectionProfile.dns`, not global), and
+   `network.firewall_enabled` (mitos-network's model is per-interface
+   zones, not one global switch — see `services::network`'s doc comment
+   for why approximating one from the other risks silently overwriting
+   real zone assignments).
 4. **`mitos-update`** — same question. `services::updates` currently does
    generic apt/dnf/pacman detection as an explicit placeholder (per our
    last conversation) since `mitos-pkg` isn't designed yet. Is
