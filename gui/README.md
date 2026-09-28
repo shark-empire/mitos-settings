@@ -1,11 +1,14 @@
 # mitos-settings-gui
 
 The graphical front-end for MITOS settings — so a user who's never opened
-a terminal never has to. A `StackSidebar` of the 27 categories on the
+a terminal never has to. A `StackSidebar` of the 29 categories on the
 left, a form on the right, one row per setting, generated straight from
-the schema, plus a search box that looks across every category at once.
-Same `SettingsManager` as the CLI and daemon underneath it — this crate
-is purely presentation.
+the schema, plus a search box that looks across every category at once
+and an Export Settings button below the sidebar (writes to
+`~/mitos-settings-export.json` — see `mitos-settings export`'s own doc
+comment for why there's no file-save dialog for this). Same
+`SettingsManager` as the CLI and daemon underneath it — this crate is
+purely presentation.
 
 ```
 $ cargo build --release -p mitos-settings-gui
