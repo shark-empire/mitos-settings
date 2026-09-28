@@ -248,6 +248,7 @@ impl SettingsManager {
         self.values.insert(key.to_string(), value.clone());
         self.persist(&spec)?;
         services::apply(key, &value);
+        services::reapply_dependents(key, self);
         if let Some(path) = self.home_conf_path.clone() {
             services::home_conf::sync_if_relevant(key, self, &path);
         }
@@ -455,8 +456,8 @@ impl SettingsManager {
         // for the duration of this function -- `_lock` drops (and
         // releases) at the end of the block, before `persist` returns.
         let lock_path = store.path().with_extension("lock");
-        let _lock = file_lock::acquire(&lock_path, Duration::from_secs(2))
-            .map_err(SettingsError::Locked)?;
+        let _lock =
+            file_lock::acquire(&lock_path, Duration::from_secs(2)).map_err(SettingsError::Locked)?;
 
         let subset: HashMap<String, Value> = self
             .values
@@ -707,7 +708,8 @@ mod tests {
     #[test]
     fn import_values_rejects_an_unknown_key() {
         let (mut manager, dir) = isolated_manager(Mode::Standalone);
-        let result = manager.import_values(vec![("no.such.key".to_string(), Value::Bool(true))]);
+        let result =
+            manager.import_values(vec![("no.such.key".to_string(), Value::Bool(true))]);
         assert!(matches!(result, Err(SettingsError::UnknownKey(_))));
         std::fs::remove_dir_all(dir).ok();
     }
@@ -722,8 +724,8 @@ mod tests {
     #[test]
     fn a_successful_set_is_recorded_in_history() {
         let (manager, dir) = isolated_manager(Mode::Standalone);
-        let mut manager = manager
-            .with_history_paths(dir.join("user-history.log"), dir.join("system-history.log"));
+        let mut manager =
+            manager.with_history_paths(dir.join("user-history.log"), dir.join("system-history.log"));
 
         manager.set("sound.volume", Value::Int(77)).unwrap();
         let history = manager.recent_history(10).unwrap();
