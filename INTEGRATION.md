@@ -332,3 +332,27 @@ it documented-but-unbuilt like the D-Bus assumptions above:
    if it wants a purpose-built minimal file (like `home.conf`, but for
    login-relevant settings) instead, that's easy to add once I know the
    shape it actually needs.
+6. **`mitos-power`** — **Answered**, against its actual source
+   (`docs/mitos-power-reference/`): it owns power state, and
+   `services::power`/`services::battery` are thin clients of it over
+   `power::client` (newline-delimited JSON on `/run/mitos/power.sock` --
+   a different wire format *and* socket location from mitos-network's).
+   Connected: `power.profile` (`SetProfile`, with `power-saver` ->
+   `powersave` name translation, replacing the `powerprofilesctl`
+   shell-out), `power.screen_timeout_minutes` (`SetIdleTimeout`), and
+   live status for both the power page (`GetPowerState`) and battery
+   page (`GetBatteries`: health and time-remaining, on top of what
+   sysfs gave), each falling back to the local read when the daemon
+   isn't reachable. Three things worth knowing that a method-name
+   skim gets wrong: `SetIdleTimeout` is the *display-off* timeout (not
+   suspend); `0` there means "instantly idle" (so "never" is sent as a
+   very long timeout, not `0`); and `SetProfile` resets it, so
+   `services::reapply_dependents` re-pushes the screen timeout after
+   every profile change. **Not connectable**, confirmed config-file-only
+   in mitos-power with no IPC setter: `power.suspend_timeout_minutes`,
+   `power.suspend_on_battery_low`, `power.lid_close_action`,
+   `battery.low_battery_threshold`. Writing mitos-power's config file
+   from here was considered and rejected (racing its own reload timing
+   with no method to ask it to re-read). Session/lock coordination
+   (lock-before-suspend, idle vs. mitos-session's own idle handling)
+   was deliberately left alone — that boundary is yours.
