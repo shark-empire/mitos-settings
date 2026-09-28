@@ -100,11 +100,7 @@ fn request(req: &Json, timeout: Duration) -> Result<Json, String> {
                 return Ok(response.clone());
             }
             Some(("Event", _)) => continue, // not our reply -- keep reading
-            _ => {
-                return Err(format!(
-                    "unexpected message from mitos-network: {frame_text}"
-                ))
-            }
+            _ => return Err(format!("unexpected message from mitos-network: {frame_text}")),
         }
     }
 
@@ -160,11 +156,7 @@ pub fn list_bluetooth_devices() -> Result<Vec<BluetoothDevice>, String> {
         .filter_map(|item| {
             Some(BluetoothDevice {
                 mac: item.get("mac").and_then(Json::as_str)?.to_string(),
-                name: item
-                    .get("name")
-                    .and_then(Json::as_str)
-                    .unwrap_or("")
-                    .to_string(),
+                name: item.get("name").and_then(Json::as_str).unwrap_or("").to_string(),
                 paired: item.get("paired").and_then(Json::as_bool).unwrap_or(false),
                 connected: item
                     .get("connected")
@@ -237,10 +229,7 @@ pub fn set_proxy_mode(mode: &str) -> Result<(), String> {
         None => fields.insert(0, ("mode".to_string(), Json::string(wire_mode))),
     }
 
-    let req = Json::variant(
-        "SetProxyConfig",
-        Json::variant("config", Json::Object(fields)),
-    );
+    let req = Json::variant("SetProxyConfig", Json::variant("config", Json::Object(fields)));
     // NOTE: `SetProxyConfig { config: ProxyConfig }` is a struct
     // variant with one field named `config` -- so the request needs an
     // *extra* layer of nesting versus most other calls in this file
@@ -302,12 +291,7 @@ pub fn list_devices() -> Result<Vec<Device>, String> {
                 ipv4_addresses: item
                     .get("ipv4_addresses")
                     .and_then(Json::as_array)
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(Json::as_str)
-                            .map(String::from)
-                            .collect()
-                    })
+                    .map(|arr| arr.iter().filter_map(Json::as_str).map(String::from).collect())
                     .unwrap_or_default(),
                 active_connection: item
                     .get("active_connection")
