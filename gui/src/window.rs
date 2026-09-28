@@ -54,6 +54,45 @@ pub fn build(app: &gtk::Application, manager: Rc<RefCell<SettingsManager>>) {
     sidebar_box.append(&search_entry);
     sidebar_box.append(&sidebar);
 
+    // The GUI's counterpart to `mitos-settings export` -- see that
+    // command's own doc comment for what it does and why it exists.
+    // Deliberately writes to one fixed, predictable path rather than
+    // opening a file-save dialog: a `GtkFileChooserDialog`/`GtkFileDialog`
+    // picker is real additional GTK-version-specific API surface this
+    // crate has otherwise been careful to avoid guessing at (see the
+    // "check this first" notes elsewhere in this file), for a feature
+    // that doesn't need one -- reusing `report_result`'s existing
+    // tooltip-based feedback (no toast/dialog API needed either) keeps
+    // this button's risk about as low as a single click can be.
+    let export_btn = gtk::Button::new();
+    export_btn.set_label("Export Settings…");
+    export_btn.set_margin_top(4);
+    export_btn.set_margin_bottom(8);
+    export_btn.set_margin_start(8);
+    export_btn.set_margin_end(8);
+    {
+        let manager = Rc::clone(&manager);
+        export_btn.connect_clicked(move |btn| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+            let path = format!("{home}/mitos-settings-export.json");
+            let contents =
+                mitos_settings::settings::json::values_to_json(&manager.borrow(), None);
+            match std::fs::write(&path, format!("{contents}\n")) {
+                Ok(()) => {
+                    btn.remove_css_class("error");
+                    let message = format!("Exported to {path}");
+                    btn.set_tooltip_text(Some(message.as_str()));
+                }
+                Err(e) => {
+                    btn.add_css_class("error");
+                    let message = format!("Couldn't write {path}: {e}");
+                    btn.set_tooltip_text(Some(message.as_str()));
+                }
+            }
+        });
+    }
+    sidebar_box.append(&export_btn);
+
     // A plain vertical `Box` rather than a `ListBox` -- these rows are
     // never selected or activated, just displayed, and clearing/rebuilding
     // a `Box` via `first_child()`/`remove()` is the exact pattern
