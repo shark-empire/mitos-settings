@@ -40,12 +40,22 @@ impl Application {
 
     fn print_screen(&self) {
         println!("\n{}", self.nav.path_string());
+        if !self.state.search.is_empty() {
+            self.print_search_results();
+            return;
+        }
         match self.nav.current_category() {
             None => {
                 for (i, cat) in categories::all().iter().enumerate() {
-                    println!("  {:>2}. {}", i + 1, cat.name());
+                    let subitems = cat.subitems();
+                    let hint = if subitems.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" ({})", subitems.join(", "))
+                    };
+                    println!("  {:>2}. {}{}", i + 1, cat.name(), hint);
                 }
-                println!("\nType a number to open a category, or 'quit'.");
+                println!("\nType a number to open a category, 'search <query>', or 'quit'.");
             }
             Some(cat) => {
                 for spec in self.manager.schema().by_category(cat.id()) {
@@ -54,14 +64,7 @@ impl Application {
                         .get(spec.key)
                         .map(|v| v.to_string())
                         .unwrap_or_default();
-                    let tag = if spec.read_only {
-                        " [read-only]"
-                    } else if spec.privilege > PrivilegeLevel::User {
-                        " [admin]"
-                    } else {
-                        ""
-                    };
-                    println!("  {:<32} {}{}", spec.label, value, tag);
+                    println!("  {:<32} {}{}", spec.label, value, tags_for(spec));
                 }
                 for (label, value) in cat.live_info() {
                     println!("  {label:<32} {value} (live)");
@@ -69,6 +72,49 @@ impl Application {
                 println!("\nCommands: set <key> <value>  |  reset <key>  |  back  |  quit");
             }
         }
+    }
+
+    /// Every setting whose label, description, or category name
+    /// contains the current query (case-insensitive) -- the same match
+    /// rule `gui/src/window.rs`'s search uses, so the two front-ends
+    /// agree on what a query matches. Results show their category
+    /// (there's no other indication which one a hit came from, unlike
+    /// browsing) and are `set`/`reset`-able directly, without first
+    /// navigating into that category.
+    fn print_search_results(&self) {
+        let query = self.state.search.to_lowercase();
+        let hits: Vec<_> = self
+            .manager
+            .schema()
+            .all()
+            .filter(|s| {
+                s.label.to_lowercase().contains(query.as_str())
+                    || s.description.to_lowercase().contains(query.as_str())
+                    || s.category.to_lowercase().contains(query.as_str())
+            })
+            .collect();
+
+        let count = hits.len();
+        let noun = if count == 1 { "match" } else { "matches" };
+        println!("Search: \"{}\" ({count} {noun})", self.state.search);
+        if hits.is_empty() {
+            println!("  No settings match. 'back' to clear the search.");
+        }
+        for spec in &hits {
+            let value = self
+                .manager
+                .get(spec.key)
+                .map(|v| v.to_string())
+                .unwrap_or_default();
+            println!(
+                "  {:<32} {} ({}){}",
+                spec.label,
+                value,
+                spec.category,
+                tags_for(spec)
+            );
+        }
+        println!("\nCommands: set <key> <value>  |  reset <key>  |  back  |  quit");
     }
 
     fn handle_command(&mut self, input: &str) {
@@ -80,8 +126,12 @@ impl Application {
             return;
         }
         if input.eq_ignore_ascii_case("back") {
-            self.nav.pop();
-            self.state.close_category();
+            if !self.state.search.is_empty() {
+                self.state.search.clear();
+            } else {
+                self.nav.pop();
+                self.state.close_category();
+            }
             return;
         }
         if input.eq_ignore_ascii_case("help") {
@@ -89,11 +139,14 @@ impl Application {
             return;
         }
 
-        if self.nav.is_at_root() {
+        if self.nav.is_at_root() && self.state.search.is_empty() {
             self.handle_root_command(input);
             return;
         }
 
+        // Reached with either a category open or search results showing
+        // -- both display settings by their (globally unique) key, so
+        // set/reset work identically in either state.
         let mut parts = input.splitn(3, ' ');
         match parts.next() {
             Some("set") => match (parts.next(), parts.next()) {
@@ -112,6 +165,15 @@ impl Application {
     }
 
     fn handle_root_command(&mut self, input: &str) {
+        if let Some(query) = input.strip_prefix("search ") {
+            let query = query.trim();
+            if query.is_empty() {
+                println!("usage: search <query>");
+            } else {
+                self.state.search = query.to_string();
+            }
+            return;
+        }
         match input.parse::<usize>() {
             Ok(index) if index >= 1 && index <= categories::all().len() => {
                 let id = categories::all()[index - 1].id();
@@ -139,12 +201,33 @@ impl Application {
     }
 }
 
+/// The `[read-only]`/`[admin]`/`[restart]` suffix for one setting row,
+/// shared by the category view and search results so the two forms of
+/// browsing tag things identically. `read-only` and `admin` stay
+/// mutually exclusive (a setting is shown as one or the other, matching
+/// this project's existing convention -- a read-only setting's
+/// privilege level isn't really the interesting fact about it);
+/// `restart` is independent and can stack with either.
+fn tags_for(spec: &crate::settings::schema::SettingSpec) -> String {
+    let mut tags = String::new();
+    if spec.read_only {
+        tags.push_str(" [read-only]");
+    } else if spec.privilege > PrivilegeLevel::User {
+        tags.push_str(" [admin]");
+    }
+    if spec.requires_restart {
+        tags.push_str(" [restart]");
+    }
+    tags
+}
+
 fn print_help() {
     println!("Commands:");
     println!("  <number>          open a category (from the top-level list)");
-    println!("  set <key> <val>   change a setting within the open category");
+    println!("  search <query>    find settings by name, description, or category");
+    println!("  set <key> <val>   change a setting (within a category or search results)");
     println!("  reset <key>       restore a setting to its default");
-    println!("  back              return to the category list");
+    println!("  back              return to the category list (or clear a search)");
     println!("  quit              exit");
 }
 
