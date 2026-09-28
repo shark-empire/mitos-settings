@@ -7,6 +7,7 @@
 //! different, blocking mode rather than a single request/response
 //! command.
 
+pub mod export;
 pub mod get;
 pub mod grants;
 pub mod history;
@@ -31,6 +32,7 @@ Commands:
   history [count]         Show recent setting changes (default: last 20)
   import <file.json>      Apply a `list --json`-shaped file; validates every
                           value before writing any of them
+  export [file.json]      Write current settings as JSON (stdout if no file given)
   grants <subcommand>     List/set/revoke mitos-service permission grants -- run
                           `mitos-settings grants` with no subcommand for details
   pick-wallpaper          Open the MITOS file picker and set the wallpaper
@@ -78,6 +80,7 @@ pub fn run(args: &[String]) -> i32 {
         "schema" => schema::execute(&manager),
         "history" => history::execute(&manager, rest),
         "import" => import::execute(&mut manager, rest),
+        "export" => export::execute(&manager, rest),
         "pick-wallpaper" => pick_wallpaper::execute(&mut manager),
         other => Err(format!("unknown command '{other}'\n\n{USAGE}")),
     };
