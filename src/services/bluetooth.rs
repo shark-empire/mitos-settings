@@ -32,7 +32,8 @@ pub struct PairedDevice {
 }
 
 pub fn set_powered(on: bool) -> std::io::Result<()> {
-    client::set_bluetooth_power(on).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    client::set_bluetooth_power(on)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
 }
 
 /// Backs `bluetooth.auto_scan` via `BluetoothScan { on }`. Worth

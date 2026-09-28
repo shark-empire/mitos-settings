@@ -69,12 +69,7 @@ pub fn live_status() -> Vec<(String, String)> {
             .collect(),
         _ => list_interfaces()
             .into_iter()
-            .map(|i| {
-                (
-                    "interface".to_string(),
-                    format!("{}: {}", i.name, i.operstate),
-                )
-            })
+            .map(|i| ("interface".to_string(), format!("{}: {}", i.name, i.operstate)))
             .collect(),
     }
 }

@@ -9,6 +9,7 @@
 
 pub mod accounts;
 pub mod audio;
+pub mod battery;
 pub mod bluetooth;
 pub mod dbus;
 pub mod display;
@@ -42,6 +43,7 @@ pub fn apply(key: &str, value: &Value) {
         "bluetooth.enabled" => value.as_bool().map(bluetooth::set_powered),
         "bluetooth.auto_scan" => value.as_bool().map(bluetooth::set_auto_scan),
         "power.profile" => value.as_str().map(power::set_profile),
+        "power.screen_timeout_minutes" => value.as_int().map(power::set_screen_timeout),
         "date_time.timezone" => value.as_str().map(time::set_timezone),
         "date_time.automatic_time" => value.as_bool().map(time::set_ntp_enabled),
         "language.system_language" => value.as_str().map(locale::set_language),
@@ -50,5 +52,25 @@ pub fn apply(key: &str, value: &Value) {
 
     if let Some(Err(err)) = result {
         eprintln!("mitos-settings: '{key}' was saved, but applying it to the running system failed: {err}");
+    }
+}
+
+/// Settings whose *live* effect gets overwritten by another setting's
+/// `apply()`, and so need pushing again right after it -- called by
+/// `SettingsManager` straight after `apply` (same spot, and same
+/// "consult the manager for current values" shape, as
+/// `home_conf::sync_if_relevant`). Currently one pair:
+/// `power.profile` -> `power.screen_timeout_minutes`, because
+/// mitos-power's `set_profile` replaces the whole idle-timeout set with
+/// the new profile's own (`idle::policy::effective_timeouts`), silently
+/// discarding whatever `SetIdleTimeout` had set before -- without this,
+/// changing the profile would quietly undo the person's chosen screen
+/// timeout. Best-effort like `apply`: a failure here is logged, never
+/// propagated.
+pub fn reapply_dependents(key: &str, manager: &crate::settings::manager::SettingsManager) {
+    if key == "power.profile" {
+        if let Ok(value) = manager.get("power.screen_timeout_minutes") {
+            apply("power.screen_timeout_minutes", value);
+        }
     }
 }
