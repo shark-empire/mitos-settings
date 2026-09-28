@@ -88,4 +88,11 @@ impl Category for PowerCategory {
             .choices(&["suspend", "hibernate", "shutdown", "nothing"]),
         );
     }
+
+    fn live_info(&self) -> Vec<(&'static str, String)> {
+        crate::services::power::live_status()
+            .into_iter()
+            .map(|(_, value)| ("status", value))
+            .collect()
+    }
 }

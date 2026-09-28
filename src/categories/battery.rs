@@ -35,20 +35,9 @@ impl Category for BatteryCategory {
     }
 
     fn live_info(&self) -> Vec<(&'static str, String)> {
-        let batteries = crate::hardware::battery::list();
-        if batteries.is_empty() {
-            return vec![("battery", "no battery detected (desktop or VM)".to_string())];
-        }
-        batteries
+        crate::services::battery::live_status()
             .into_iter()
-            .map(|b| {
-                let percent = b
-                    .capacity_percent
-                    .map(|p| format!("{p}%"))
-                    .unwrap_or_else(|| "unknown".into());
-                let status = b.status.unwrap_or_else(|| "unknown".into());
-                ("battery", format!("{}: {percent}, {status}", b.name))
-            })
+            .map(|(_, value)| ("battery", value))
             .collect()
     }
 }
