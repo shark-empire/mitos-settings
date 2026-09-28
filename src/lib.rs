@@ -19,5 +19,6 @@ pub mod network;
 pub mod notifications;
 pub mod permissions;
 pub mod platform;
+pub mod power;
 pub mod services;
 pub mod settings;
